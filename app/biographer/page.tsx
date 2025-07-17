@@ -147,14 +147,21 @@ const AVAILABLE_PROVIDERS = [
   { value: 'openai', label: 'OpenAI' },
   { value: 'anthropic', label: 'Anthropic' },
   { value: 'google', label: 'Google' },
-  { value: 'mistral', label: 'Mistral' },
+  { value: 'groq', label: 'Groq' },
 ];
 
 const AVAILABLE_MODELS = [
+  // Anthropic
+  { value: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4 (2025-05-14)' },
+  { value: 'claude-3-7-sonnet-20250219', label: 'Claude 3.7 Sonnet (2025-02-19)' },
+  { value: 'claude-3-5-sonnet-20241022', label: 'Claude 3.5 Sonnet (2024-10-22)' },
+  // Google
+  { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
+  { value: 'gemini-2.5-flash-lite-preview-06-17', label: 'Gemini 2.5 Flash Lite' },
+  // OpenAI
   { value: 'gpt-4o', label: 'GPT-4o' },
-  { value: 'gpt-4o-mini', label: 'GPT-4o Mini' },
-  { value: 'gpt-4-turbo', label: 'GPT-4 Turbo' },
-  { value: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo' },
+  // Groq
+  { value: 'moonshotai/kimi-k2-instruct', label: 'Kimi-K2 Instruct' },
 ];
 
 interface BiographerResponse {
@@ -284,7 +291,7 @@ export default function BiographerTestPage() {
   const [initialMessage, setInitialMessage] = useState(DEFAULT_INITIAL_MESSAGE);
   const [userMessage, setUserMessage] = useState(DEFAULT_USER_MESSAGE);
   const [selectedProvider, setSelectedProvider] = useState('openai');
-  const [selectedModel, setSelectedModel] = useState('gpt-4o-mini');
+  const [selectedModel, setSelectedModel] = useState('gpt-4o');
   const [responses, setResponses] = useState<BiographerResponse[]>([]);
   const [isRunning, setIsRunning] = useState(false);
   

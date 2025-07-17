@@ -16,6 +16,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Plus, Copy, Trash2, ChevronDown, Hash, FileText, Check } from 'lucide-react';
 import { ModelSelector } from './shared/ModelSelector';
 import { CopyButton } from './shared/CopyButton';
+import {
+  MODEL_PROVIDER_MAP,
+} from './shared/types';
 import type { 
   ModelThread, 
   DataThread, 
@@ -165,36 +168,29 @@ export function ModelThreadSection({
                     </div>
                   </div>
                   <div className="space-y-3">
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-sm font-medium">Provider</label>
-                        <Select value={thread.provider} onValueChange={(value) => onUpdateThread(thread.id, { provider: value })}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select provider" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="openai">OpenAI</SelectItem>
-                            <SelectItem value="anthropic">Anthropic</SelectItem>
-                            <SelectItem value="google">Google</SelectItem>
-                            <SelectItem value="mistral">Mistral</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium">Model</label>
-                        <Select value={thread.model} onValueChange={(value) => onUpdateThread(thread.id, { model: value })}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select model" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="gpt-4o">GPT-4o</SelectItem>
-                            <SelectItem value="gpt-4o-mini">GPT-4o Mini</SelectItem>
-                            <SelectItem value="gpt-4-turbo">GPT-4 Turbo</SelectItem>
-                            <SelectItem value="claude-3-5-sonnet-20241022">Claude 3.5 Sonnet</SelectItem>
-                            <SelectItem value="claude-3-haiku-20240307">Claude 3 Haiku</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
+                    <div>
+                      <label className="text-sm font-medium">Model</label>
+                      <Select
+                        value={thread.model}
+                        onValueChange={(value) => {
+                          // Auto-update provider based on selected model
+                          const provider = MODEL_PROVIDER_MAP[value] || thread.provider;
+                          onUpdateThread(thread.id, { model: value, provider });
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select model" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="claude-sonnet-4-20250514">Claude Sonnet 4 (20250514)</SelectItem>
+                          <SelectItem value="claude-3-7-sonnet-20250219">Claude 3.7 Sonnet (20250219)</SelectItem>
+                          <SelectItem value="claude-3-5-sonnet-20241022">Claude 3.5 Sonnet (20241022)</SelectItem>
+                          <SelectItem value="gemini-2.5-flash">Gemini 2.5 Flash</SelectItem>
+                          <SelectItem value="gemini-2.5-flash-lite-preview-06-17">Gemini 2.5 Flash Lite</SelectItem>
+                          <SelectItem value="gpt-4o">GPT-4o</SelectItem>
+                          <SelectItem value="moonshotai/kimi-k2-instruct">Kimi-K2 Instruct</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
                 </div>
@@ -213,36 +209,25 @@ export const ThreadableSection = ModelThreadSection;
 // Individual render functions for use in other components
 export const renderModelThread = (thread: ModelThread, onUpdate: (updates: Partial<ModelThread>) => void) => (
   <div className="space-y-3">
-    <div className="grid grid-cols-2 gap-2">
-      <div>
-        <label className="text-sm font-medium">Provider</label>
-        <Select value={thread.provider} onValueChange={(value) => onUpdate({ provider: value })}>
-          <SelectTrigger>
-            <SelectValue placeholder="Select provider" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="openai">OpenAI</SelectItem>
-            <SelectItem value="anthropic">Anthropic</SelectItem>
-            <SelectItem value="google">Google</SelectItem>
-            <SelectItem value="mistral">Mistral</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      <div>
-        <label className="text-sm font-medium">Model</label>
-        <Select value={thread.model} onValueChange={(value) => onUpdate({ model: value })}>
-          <SelectTrigger>
-            <SelectValue placeholder="Select model" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="gpt-4o">GPT-4o</SelectItem>
-            <SelectItem value="gpt-4o-mini">GPT-4o Mini</SelectItem>
-            <SelectItem value="gpt-4-turbo">GPT-4 Turbo</SelectItem>
-            <SelectItem value="claude-3-5-sonnet-20241022">Claude 3.5 Sonnet</SelectItem>
-            <SelectItem value="claude-3-haiku-20240307">Claude 3 Haiku</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+    <div>
+      <label className="text-sm font-medium">Model</label>
+      <Select
+        value={thread.model}
+        onValueChange={(value) => onUpdate({ model: value, provider: MODEL_PROVIDER_MAP[value] || thread.provider })}
+      >
+        <SelectTrigger>
+          <SelectValue placeholder="Select model" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="claude-sonnet-4-20250514">Claude Sonnet 4 (20250514)</SelectItem>
+          <SelectItem value="claude-3-7-sonnet-20250219">Claude 3.7 Sonnet (20250219)</SelectItem>
+          <SelectItem value="claude-3-5-sonnet-20241022">Claude 3.5 Sonnet (20241022)</SelectItem>
+          <SelectItem value="gemini-2.5-flash">Gemini 2.5 Flash</SelectItem>
+          <SelectItem value="gemini-2.5-flash-lite-preview-06-17">Gemini 2.5 Flash Lite</SelectItem>
+          <SelectItem value="gpt-4o">GPT-4o</SelectItem>
+          <SelectItem value="moonshotai/kimi-k2-instruct">Kimi-K2 Instruct</SelectItem>
+        </SelectContent>
+      </Select>
     </div>
   </div>
 );

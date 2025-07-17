@@ -146,9 +146,9 @@ export function createDefaultPipelineConfig(): PipelineConfig {
     modelThreads: [
       {
         id: generateId(),
-        name: 'GPT-4o Mini',
+        name: 'GPT-4o',
         provider: 'openai',
-        model: 'gpt-4o-mini'
+        model: 'gpt-4o'
       }
     ],
     dataThreads: [

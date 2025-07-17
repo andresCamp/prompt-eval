@@ -26,15 +26,16 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Loader2, Plus, Play, Copy, Trash2, GitBranch, Clock, FileText, Hash, Check, Brain, Database, Cpu, MessageSquare, User as UserIcon } from 'lucide-react';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
-import { 
-  ModelThread, 
-  DataThread, 
-  SystemPromptThread, 
-  InitialMessageThread, 
-  UserMessageThread, 
-  ExecutionThread, 
+import {
+  ModelThread,
+  DataThread,
+  SystemPromptThread,
+  InitialMessageThread,
+  UserMessageThread,
+  ExecutionThread,
   PipelineConfig,
-  BiographerResponse
+  BiographerResponse,
+  MODEL_PROVIDER_MAP,
 } from '@/components/prompt-playground/shared/types';
 import { CollapsibleCard } from '@/components/prompt-playground/shared/CollapsibleCard';
 import { biographers } from '../biographer/bio';
@@ -265,7 +266,7 @@ export default function PipelineThreadingPlaygroundPage() {
       id: generateId(),
       name: `Model ${config.modelThreads.length + 1}`,
       provider: 'openai',
-      model: 'gpt-4o-mini'
+      model: 'gpt-4o'
     };
     handleUpdateConfig({
       modelThreads: [...config.modelThreads, newThread]
@@ -276,8 +277,12 @@ export default function PipelineThreadingPlaygroundPage() {
     handleUpdateConfig({
       modelThreads: config.modelThreads.map(thread => {
         if (thread.id !== id) return thread;
-        const merged = { ...thread, ...updates } as ModelThread;
-        if (updates.model) merged.name = updates.model;
+        let merged = { ...thread, ...updates } as ModelThread;
+        if (updates.model) {
+          // Auto-update provider and name when model changes
+          const provider = MODEL_PROVIDER_MAP[updates.model] || merged.provider;
+          merged = { ...merged, name: updates.model, provider };
+        }
         return merged;
       })
     });
