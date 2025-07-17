@@ -1,13 +1,36 @@
+/**
+ * @fileoverview Biographer Response Tester - A testing interface for evaluating AI biographer personas
+ * 
+ * This component provides a comprehensive testing environment for biographer AI personas,
+ * allowing users to configure prompts, select AI models, and compare responses across
+ * multiple biographer personalities simultaneously.
+ * 
+ * @author AI Assistant
+ * @version 1.0.0
+ */
+
 'use client';
 
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Select } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
-import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
-import { Copy, Play, Loader2, ChevronDown, Clock, Hash, FileText, Check, Database, Settings, MessageSquare, User } from 'lucide-react';
+import { Copy, Play, Loader2, ChevronDown, Clock, Hash, FileText, Check, Database, Settings, MessageSquare, User, ChevronsUpDown } from 'lucide-react';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import { cn } from '@/lib/utils';
 import { biographers } from './bio';
 
 const DEFAULT_SYSTEM_PROMPT = `<core_identity>
@@ -144,7 +167,107 @@ interface BiographerResponse {
   wordCount?: number;
 }
 
+// Provider Combobox Component
+function ProviderCombobox({ value, onValueChange }: { value: string; onValueChange: (value: string) => void }) {
+  const [open, setOpen] = useState(false);
 
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className="w-32 justify-between"
+        >
+          {value
+            ? AVAILABLE_PROVIDERS.find((provider) => provider.value === value)?.label
+            : "Select provider..."}
+          <ChevronsUpDown className="opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-32 p-0">
+        <Command>
+          <CommandInput placeholder="Search provider..." className="h-9" />
+          <CommandList>
+            <CommandEmpty>No provider found.</CommandEmpty>
+            <CommandGroup>
+              {AVAILABLE_PROVIDERS.map((provider) => (
+                <CommandItem
+                  key={provider.value}
+                  value={provider.value}
+                  onSelect={(currentValue) => {
+                    onValueChange(currentValue === value ? "" : currentValue);
+                    setOpen(false);
+                  }}
+                >
+                  {provider.label}
+                  <Check
+                    className={cn(
+                      "ml-auto",
+                      value === provider.value ? "opacity-100" : "opacity-0"
+                    )}
+                  />
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+// Model Combobox Component
+function ModelCombobox({ value, onValueChange }: { value: string; onValueChange: (value: string) => void }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className="w-48 justify-between"
+        >
+          {value
+            ? AVAILABLE_MODELS.find((model) => model.value === value)?.label
+            : "Select model..."}
+          <ChevronsUpDown className="opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-48 p-0">
+        <Command>
+          <CommandInput placeholder="Search model..." className="h-9" />
+          <CommandList>
+            <CommandEmpty>No model found.</CommandEmpty>
+            <CommandGroup>
+              {AVAILABLE_MODELS.map((model) => (
+                <CommandItem
+                  key={model.value}
+                  value={model.value}
+                  onSelect={(currentValue) => {
+                    onValueChange(currentValue === value ? "" : currentValue);
+                    setOpen(false);
+                  }}
+                >
+                  {model.label}
+                  <Check
+                    className={cn(
+                      "ml-auto",
+                      value === model.value ? "opacity-100" : "opacity-0"
+                    )}
+                  />
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 // Utility functions for metrics
 const countWords = (text: string): number => {
@@ -207,7 +330,7 @@ export default function BiographerTestPage() {
   };
 
   // Template replacement function
-  const replaceTemplate = (template: string, biographer: any): string => {
+  const replaceTemplate = (template: string, biographer: typeof biographers[0]): string => {
     try {
       // Create a function that returns the template with variables replaced
       const templateFunction = new Function(
@@ -341,35 +464,21 @@ export default function BiographerTestPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Biographer Response Tester</h1>
         <div className="flex gap-2">
-          <Select 
+          <ProviderCombobox 
             value={selectedProvider} 
-            onChange={(e) => setSelectedProvider(e.target.value)}
-            className="w-32"
-          >
-            {AVAILABLE_PROVIDERS.map((provider) => (
-              <option key={provider.value} value={provider.value}>
-                {provider.label}
-              </option>
-            ))}
-          </Select>
-          <Select 
+            onValueChange={setSelectedProvider}
+          />
+          <ModelCombobox 
             value={selectedModel} 
-            onChange={(e) => setSelectedModel(e.target.value)}
-            className="w-48"
-          >
-            {AVAILABLE_MODELS.map((model) => (
-              <option key={model.value} value={model.value}>
-                {model.label}
-              </option>
-            ))}
-          </Select>
-                    <Button
+            onValueChange={setSelectedModel}
+          />
+          <Button
             onClick={() => copyToClipboard(
               `**Provider:** ${selectedProvider}\n**Model:** ${selectedModel}\n\n**System Prompt:**\n${systemPrompt}\n\n**Initial Message:**\n${initialMessage}\n\n**User Message:**\n${userMessage}`,
               'copy-test-config'
             )}
             variant="outline"
-            className="flex items-center gap-2 cursor-pointer"
+            className="flex items-center gap-2 cursor-pointer hover:bg-muted hover:scale-105 transition-all"
           >
             {copiedStates['copy-test-config'] ? (
               <Check className="h-4 w-4 text-green-600" />
@@ -400,7 +509,7 @@ export default function BiographerTestPage() {
 
       {/* Data Accordion */}
       <Card 
-        className="cursor-pointer hover:bg-gray-50 transition-colors"
+        className="cursor-pointer hover:bg-muted transition-colors"
         onClick={() => toggleSection('data')}
       >
         <CardHeader className="flex flex-row items-center justify-between space-y-0 py-3">
@@ -430,7 +539,7 @@ export default function BiographerTestPage() {
                 e.stopPropagation();
                 copyToClipboard(JSON.stringify(biographers, null, 2), 'data');
               }}
-              className="h-8 w-8 p-0 cursor-pointer"
+              className="h-8 w-8 p-0 cursor-pointer hover:bg-muted hover:scale-105 transition-all"
             >
               {copiedStates['data'] ? (
                 <Check className="h-4 w-4 text-green-600" />
@@ -449,7 +558,7 @@ export default function BiographerTestPage() {
                 // In the future, this could parse and update the biographers array
               }}
               onClick={(e) => e.stopPropagation()}
-              className="min-h-[400px] font-mono text-sm bg-white"
+              className="min-h-[400px] font-mono text-sm bg-background"
               placeholder="Biographer data will appear here..."
               readOnly
             />
@@ -462,7 +571,7 @@ export default function BiographerTestPage() {
 
       {/* System Prompt Accordion */}
       <Card 
-        className="cursor-pointer hover:bg-gray-50 transition-colors"
+        className="cursor-pointer hover:bg-muted transition-colors"
         onClick={() => toggleSection('systemPrompt')}
       >
         <CardHeader className="flex flex-row items-center justify-between space-y-0 py-3">
@@ -492,7 +601,7 @@ export default function BiographerTestPage() {
                 e.stopPropagation();
                 copyToClipboard(systemPrompt, 'system-prompt');
               }}
-              className="h-8 w-8 p-0 cursor-pointer"
+              className="h-8 w-8 p-0 cursor-pointer hover:bg-muted hover:scale-105 transition-all"
             >
               {copiedStates['system-prompt'] ? (
                 <Check className="h-4 w-4 text-green-600" />
@@ -508,7 +617,7 @@ export default function BiographerTestPage() {
               value={systemPrompt}
               onChange={(e) => setSystemPrompt(e.target.value)}
               onClick={(e) => e.stopPropagation()}
-              className="min-h-[200px] font-mono text-sm bg-white"
+              className="min-h-[200px] font-mono text-sm bg-background"
               placeholder="Enter system prompt..."
             />
 
@@ -518,7 +627,7 @@ export default function BiographerTestPage() {
 
       {/* Initial Message Accordion */}
       <Card 
-        className="cursor-pointer hover:bg-gray-50 transition-colors"
+        className="cursor-pointer hover:bg-muted transition-colors"
         onClick={() => toggleSection('initialMessage')}
       >
         <CardHeader className="flex flex-row items-center justify-between space-y-0 py-3">
@@ -548,7 +657,7 @@ export default function BiographerTestPage() {
                 e.stopPropagation();
                 copyToClipboard(initialMessage, 'initial-message');
               }}
-              className="h-8 w-8 p-0 cursor-pointer"
+              className="h-8 w-8 p-0 cursor-pointer hover:bg-muted hover:scale-105 transition-all"
             >
               {copiedStates['initial-message'] ? (
                 <Check className="h-4 w-4 text-green-600" />
@@ -564,7 +673,7 @@ export default function BiographerTestPage() {
               value={initialMessage}
               onChange={(e) => setInitialMessage(e.target.value)}
               onClick={(e) => e.stopPropagation()}
-              className="min-h-[100px] bg-white"
+              className="min-h-[100px] bg-background"
               placeholder="Enter initial message..."
             />
 
@@ -574,7 +683,7 @@ export default function BiographerTestPage() {
 
       {/* User Message Accordion */}
       <Card 
-        className="cursor-pointer hover:bg-gray-50 transition-colors"
+        className="cursor-pointer hover:bg-muted transition-colors"
         onClick={() => toggleSection('userMessage')}
       >
         <CardHeader className="flex flex-row items-center justify-between space-y-0 py-3">
@@ -604,7 +713,7 @@ export default function BiographerTestPage() {
                 e.stopPropagation();
                 copyToClipboard(userMessage, 'user-message');
               }}
-              className="h-8 w-8 p-0 cursor-pointer"
+              className="h-8 w-8 p-0 cursor-pointer hover:bg-muted hover:scale-105 transition-all"
             >
               {copiedStates['user-message'] ? (
                 <Check className="h-4 w-4 text-green-600" />
@@ -620,7 +729,7 @@ export default function BiographerTestPage() {
               value={userMessage}
               onChange={(e) => setUserMessage(e.target.value)}
               onClick={(e) => e.stopPropagation()}
-              className="min-h-[120px] bg-white"
+              className="min-h-[120px] bg-background"
               placeholder="Enter user message..."
             />
 
@@ -636,7 +745,7 @@ export default function BiographerTestPage() {
             <Button 
               onClick={copyAllResponses}
               variant="outline"
-              className="flex items-center gap-2 cursor-pointer"
+              className="flex items-center gap-2 cursor-pointer hover:bg-muted hover:scale-105 transition-all"
             >
               {copiedStates['copy-all'] ? (
                 <Check className="h-4 w-4 text-green-600" />
@@ -656,7 +765,7 @@ export default function BiographerTestPage() {
                       variant="ghost"
                       size="sm"
                       onClick={() => copyToClipboard(response.response, `response-${response.name}`)}
-                      className="h-8 w-8 p-0 cursor-pointer"
+                      className="h-8 w-8 p-0 cursor-pointer hover:bg-muted hover:scale-105 transition-all disabled:hover:scale-100 disabled:hover:bg-transparent"
                       disabled={response.loading || !!response.error}
                     >
                       {copiedStates[`response-${response.name}`] ? (
