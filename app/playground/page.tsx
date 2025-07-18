@@ -36,6 +36,7 @@ import {
   PipelineConfig,
   BiographerResponse,
   MODEL_PROVIDER_MAP,
+  ConversationTurn,
 } from '@/components/prompt-playground/shared/types';
 import { CollapsibleCard } from '@/components/prompt-playground/shared/CollapsibleCard';
 import { biographers } from '../biographer/bio';
@@ -50,7 +51,8 @@ import {
   createDefaultPipelineConfig,
   updateExecutionThreads,
   replaceTemplate,
-  generateId
+  generateId,
+  generateExecutionThreads
 } from '@/components/prompt-playground';
 
 /**
@@ -722,6 +724,232 @@ export default function PipelineThreadingPlaygroundPage() {
     );
   };
 
+  // Add Turn Handling
+  const handleAddTurn = () => {
+    const newTurnId = generateId();
+    const newUserThread: UserMessageThread = {
+      id: generateId(),
+      name: `User ${config.turns?.length ? config.turns.length + 2 : 2}` ,
+      message: ''
+    };
+    const newTurnExec = generateExecutionThreads(
+      config.modelThreads,
+      config.dataThreads,
+      config.systemPromptThreads,
+      config.initialMessageThreads,
+      [newUserThread]
+    );
+    const newTurn = {
+      id: newTurnId,
+      name: `Turn ${config.turns?.length ? config.turns.length + 2 : 2}`,
+      userMessageThreads: [newUserThread],
+      executionThreads: newTurnExec
+    };
+    setConfig(prev => ({
+      ...prev,
+      turns: [...(prev.turns || []), newTurn]
+    }));
+  };
+
+  // Turn-specific handlers
+  const handleUpdateTurn = (turnId: string, updates: Partial<ConversationTurn>) => {
+    setConfig(prev => ({
+      ...prev,
+      turns: (prev.turns || []).map(t => t.id === turnId ? { ...t, ...updates } : t)
+    }));
+  };
+
+  const handleAddUserMessageThreadTurn = (turnId: string) => {
+    const newThread: UserMessageThread = {
+      id: generateId(),
+      name: `User ${(config.turns?.find(t=>t.id===turnId)?.userMessageThreads.length || 0) + 1}`,
+      message: ''
+    };
+    setConfig(prev => ({
+      ...prev,
+      turns: (prev.turns || []).map(t => {
+        if (t.id !== turnId) return t;
+        const newExec = generateExecutionThreads(
+          prev.modelThreads,
+          prev.dataThreads,
+          prev.systemPromptThreads,
+          prev.initialMessageThreads,
+          [...t.userMessageThreads, newThread]
+        );
+        return { ...t, userMessageThreads: [...t.userMessageThreads, newThread], executionThreads: newExec };
+      })
+    }));
+  };
+
+  const handleUpdateUserMessageThreadTurn = (turnId: string, threadId: string, updates: Partial<UserMessageThread>) => {
+    setConfig(prev => ({
+      ...prev,
+      turns: (prev.turns || []).map(t => {
+        if (t.id !== turnId) return t;
+        const updatedUserThreads = t.userMessageThreads.map(ut => ut.id === threadId ? { ...ut, ...updates } : ut);
+        const newExec = generateExecutionThreads(prev.modelThreads, prev.dataThreads, prev.systemPromptThreads, prev.initialMessageThreads, updatedUserThreads);
+        return { ...t, userMessageThreads: updatedUserThreads, executionThreads: newExec };
+      })
+    }));
+  };
+
+  const handleDeleteUserMessageThreadTurn = (turnId: string, threadId: string) => {
+    setConfig(prev => ({
+      ...prev,
+      turns: (prev.turns || []).map(t => {
+        if (t.id !== turnId) return t;
+        if (t.userMessageThreads.length <= 1) return t;
+        const remaining = t.userMessageThreads.filter(ut => ut.id !== threadId);
+        const newExec = generateExecutionThreads(prev.modelThreads, prev.dataThreads, prev.systemPromptThreads, prev.initialMessageThreads, remaining);
+        return { ...t, userMessageThreads: remaining, executionThreads: newExec };
+      })
+    }));
+  };
+
+  // (Removed infinite-looping effect; handlers already call updateExecutionThreads when modifying turns)
+
+  // Helper to build messages for a single execution thread
+  const buildMessagesForThread = (
+    thread: ExecutionThread,
+    biographer: Record<string, unknown>,
+    turnIdx: number
+  ) => {
+    const systemPrompt = replaceTemplate(thread.systemPromptThread.prompt, biographer);
+    const initialMessage = replaceTemplate(thread.initialMessageThread.message, biographer);
+    const userMessage = replaceTemplate(thread.userMessageThread.message, biographer);
+
+    const bioName = String(biographer.name);
+    const history = getHistoryForBiographer(bioName, turnIdx);
+
+    return [
+      { role: 'system', content: systemPrompt },
+      { role: 'assistant', content: initialMessage },
+      ...history,
+      { role: 'user', content: userMessage }
+    ];
+  };
+
+  // Helper: gather history messages for a given biographer up to current turn
+  const getHistoryForBiographer = (
+    bioName: string,
+    currentTurnIdx: number
+  ): { role: 'user' | 'assistant'; content: string }[] => {
+    const history: { role: 'user' | 'assistant'; content: string }[] = [];
+    // Include baseline conversation (initial user + assistant response from main execution threads)
+    const baselineUser = config.userMessageThreads?.[0]?.message;
+    if (baselineUser) history.push({ role: 'user', content: baselineUser });
+    const baselineAssistantResp = config.executionThreads
+      .flatMap(et => et.responses)
+      .find(r => r.name === bioName)?.response;
+    if (baselineAssistantResp) history.push({ role: 'assistant', content: baselineAssistantResp });
+
+    if (!config.turns) return history;
+    for (let i = 0; i < currentTurnIdx; i++) {
+      const t = config.turns[i];
+      const userMsg = t.userMessageThreads[0]?.message;
+      if (userMsg) history.push({ role: 'user', content: userMsg });
+      let prevResp: string | undefined;
+      for (const e of t.executionThreads) {
+        const resp = e.responses?.find(r => r.name === bioName)?.response;
+        if (resp) { prevResp = resp; break; }
+      }
+      if (prevResp) history.push({ role: 'assistant', content: prevResp });
+    }
+    return history;
+  };
+
+  // Turn Execution Handlers
+  const handleUpdateExecutionThreadTurn = (turnId: string, execId: string, updates: Partial<ExecutionThread>) => {
+    setConfig(prev => ({
+      ...prev,
+      turns: (prev.turns || []).map(t => t.id === turnId ? {
+        ...t,
+        executionThreads: t.executionThreads.map(et => et.id === execId ? { ...et, ...updates } : et)
+      } : t)
+    }));
+  };
+
+  const handleRunExecutionThreadTurn = async (turnId: string, execId: string) => {
+    const turnIndex = config.turns?.findIndex(t => t.id === turnId) ?? -1;
+    const turn = config.turns?.[turnIndex];
+    if (!turn) return;
+    const thread = turn.executionThreads.find(et => et.id === execId);
+    if (!thread) return;
+
+    // parse data
+    let biographerData: Array<Record<string, unknown>> = [];
+    try {
+      biographerData = JSON.parse(thread.dataThread.data);
+    } catch {
+      return;
+    }
+
+    const initialResponses: BiographerResponse[] = biographerData.map(b => ({ name: String(b.name), response: '', loading: true }));
+
+    handleUpdateExecutionThreadTurn(turnId, execId, { isRunning: true, responses: initialResponses });
+
+    const responsePromises = biographerData.map(async (bio, idx) => {
+      const startTime = Date.now();
+      try {
+        const messages = buildMessagesForThread(thread, bio, turnIndex);
+        // NOTE: prior-turn context not yet included
+        const response = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model: thread.modelThread.model, messages })
+        });
+        if (!response.ok) throw new Error(`HTTP error ${response.status}`);
+        const reader = response.body?.getReader();
+        const decoder = new TextDecoder();
+        let result = '';
+        if (reader) {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            result += decoder.decode(value, { stream: true });
+          }
+        }
+        const endTime = Date.now();
+        const duration = (endTime - startTime) / 1000;
+        const wordCount = result.trim().split(/\s+/).filter(Boolean).length;
+        const tokenCount = Math.ceil(result.length / 4);
+        setConfig(prev => ({
+          ...prev,
+          turns: (prev.turns || []).map(t => t.id === turnId ? {
+            ...t,
+            executionThreads: t.executionThreads.map(et => et.id === execId ? {
+              ...et,
+              responses: et.responses.map((r, i) => i === idx ? { ...r, response: result, loading: false, duration, wordCount, tokenCount } : r)
+            } : et)
+          } : t)
+        }));
+      } catch (e) {
+        const errMsg = e instanceof Error ? e.message : 'Unknown error';
+        const endTime = Date.now();
+        const duration = (endTime - startTime) / 1000;
+        setConfig(prev => ({
+          ...prev,
+          turns: (prev.turns || []).map(t => t.id === turnId ? {
+            ...t,
+            executionThreads: t.executionThreads.map(et => et.id === execId ? {
+              ...et,
+              responses: et.responses.map((r, i) => i === idx ? { ...r, error: errMsg, loading: false, duration } : r)
+            } : et)
+          } : t)
+        }));
+      }
+    });
+
+    await Promise.all(responsePromises);
+    handleUpdateExecutionThreadTurn(turnId, execId, { isRunning: false });
+  };
+
+  const handleRunAllExecutionThreadsTurn = async (turnId: string) => {
+    const turn = config.turns?.find(t => t.id === turnId);
+    if (!turn) return;
+    await Promise.all(turn.executionThreads.map(et => handleRunExecutionThreadTurn(turnId, et.id)));
+  };
+
   return (
     <div className="mx-auto p-6 space-y-6 max-w-none">
       {/* Header */}
@@ -1109,7 +1337,7 @@ export default function PipelineThreadingPlaygroundPage() {
                 e.stopPropagation();
                 handleRunAllExecutionThreads();
               }}
-              disabled={config.executionThreads.some(t => t.isRunning)}
+              disabled={anyThreadRunning || totalCombinations === 0}
               variant="default"
             >
               {config.executionThreads.some(t => t.isRunning) ? (
@@ -1203,26 +1431,144 @@ export default function PipelineThreadingPlaygroundPage() {
           </ScrollArea>
       </div>
 
-      {/* Help Text */}
-      {totalCombinations <= 1 && (
-        <Card className="bg-gradient-to-r from-purple-50 to-blue-50 border-purple-200">
-          <CardContent className="pt-6">
-            <div className="flex items-start gap-3">
-              <div className="flex-shrink-0 w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
-                <GitBranch className="h-4 w-4 text-purple-600" />
-              </div>
-              <div>
-                <h3 className="font-medium text-purple-900">Ready to Thread?</h3>
-                <p className="text-sm text-purple-700 mt-1">
-                  Add threads to any pipeline stage to create multiple combinations. 
-                  For example, add 2 models + 2 system prompts = 4 execution threads. 
-                  Each combination runs independently for comprehensive A/B testing.
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+      {/* Add Turn (first) */}
+      {!config.turns?.length && (
+        <div className="flex justify-center mt-4">
+          <Button onClick={handleAddTurn} variant="secondary" className="flex items-center gap-2">
+            <Plus className="h-4 w-4" /> Add Turn
+          </Button>
+        </div>
       )}
+
+      {config.turns && config.turns.map((turn, turnIndex) => (
+        <div key={turn.id} className="mt-10 space-y-6">
+          <h2 className="text-xl font-bold">{turn.name}</h2>
+          {/* User Message Threads for this turn */}
+          <div className="space-y-3">
+            <div className="grid gap-4 items-start" style={{ gridTemplateColumns: 'minmax(0,1fr) auto' }}>
+              {turn.userMessageThreads.length < 3 ? (
+                <div className={`grid gap-4 ${turn.userMessageThreads.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                  {turn.userMessageThreads.map(tm => (
+                    <CollapsibleCard
+                      key={tm.id}
+                      id={tm.id}
+                      name={tm.name}
+                      onNameChange={(name) => handleUpdateUserMessageThreadTurn(turn.id, tm.id, { name })}
+                      onDuplicate={() => handleAddUserMessageThreadTurn(turn.id)}
+                      onDelete={() => handleDeleteUserMessageThreadTurn(turn.id, tm.id)}
+                      canDelete={turn.userMessageThreads.length > 1}
+                      borderColor="border-red-200"
+                      subtitle={`Message: ${tm.name}`}
+                      icon={<UserIcon className="h-4 w-4 text-red-600" />}
+                      onCopy={() => copyUserMessageThread(tm)}
+                      copied={!!(config.copiedStates && config.copiedStates[`user-${tm.id}`])}
+                    >
+                      {renderUserMessageThread(tm, (updates) => handleUpdateUserMessageThreadTurn(turn.id, tm.id, updates))}
+                    </CollapsibleCard>
+                  ))}
+                </div>
+              ) : (
+                <div className="max-w-full overflow-x-auto">
+                  <ScrollArea className="w-full">
+                    <div className="flex gap-4 pb-4">
+                      {turn.userMessageThreads.map(tm => (
+                        <div key={tm.id} className="w-[450px] shrink-0">
+                          <CollapsibleCard
+                            id={tm.id}
+                            name={tm.name}
+                            onNameChange={(name) => handleUpdateUserMessageThreadTurn(turn.id, tm.id, { name })}
+                            onDuplicate={() => handleAddUserMessageThreadTurn(turn.id)}
+                            onDelete={() => handleDeleteUserMessageThreadTurn(turn.id, tm.id)}
+                            canDelete={turn.userMessageThreads.length > 1}
+                            borderColor="border-red-200"
+                            subtitle={`Message: ${tm.name}`}
+                            icon={<UserIcon className="h-4 w-4 text-red-600" />}
+                            onCopy={() => copyUserMessageThread(tm)}
+                            copied={!!(config.copiedStates && config.copiedStates[`user-${tm.id}`])}
+                          >
+                            {renderUserMessageThread(tm, (updates) => handleUpdateUserMessageThreadTurn(turn.id, tm.id, updates))}
+                          </CollapsibleCard>
+                        </div>
+                      ))}
+                    </div>
+                    <ScrollBar orientation="horizontal" />
+                  </ScrollArea>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Results Grid for this turn */}
+          {(() => {
+            const turnBiographerSet = new Set<string>();
+            turn.executionThreads.forEach(et => {
+              let bios: Array<Record<string, unknown>>;
+              try { bios = JSON.parse(et.dataThread.data); } catch { bios = []; }
+              bios.forEach(b => turnBiographerSet.add(String(b.name)));
+            });
+            const biosArray = Array.from(turnBiographerSet).sort();
+            const turnCombinations = turn.executionThreads.length;
+            const turnAnyRunning = turn.executionThreads.some(et => et.isRunning);
+            return (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between hover:bg-muted transition-colors rounded p-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
+                    <h3 className="text-lg font-semibold">{turn.name} Results ({turnCombinations})</h3>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button onClick={() => handleRunAllExecutionThreadsTurn(turn.id)} disabled={turnAnyRunning || turnCombinations===0} variant="default" className="flex items-center gap-2">
+                      {turnAnyRunning ? (<><Loader2 className="h-4 w-4 animate-spin" /> Running...</>) : (<><Play className="h-4 w-4"/> Run All</>)}
+                    </Button>
+                  </div>
+                </div>
+                <ScrollArea className="w-full border rounded-lg">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50 sticky top-0">
+                      <tr>
+                        <th className="sticky left-0 bg-gray-50 px-4 py-2 text-left text-sm font-medium text-gray-900" style={{width: BIO_COL_WIDTH, minWidth: BIO_COL_WIDTH}}>Biographer</th>
+                        {turn.executionThreads.map(et => (
+                          <th key={et.id} style={{width: THREAD_COL_WIDTH, minWidth: THREAD_COL_WIDTH}} className="px-4 py-2 text-left text-sm font-medium text-gray-900 border-l border-gray-200">
+                            <div className="flex items-center justify-between">
+                              <span className="truncate max-w-[200px]">{et.name}</span>
+                              <div className="flex items-center gap-1">
+                                <Button size="icon" variant="ghost" onClick={() => handleRunExecutionThreadTurn(turn.id, et.id)} disabled={et.isRunning}>{et.isRunning ? <Loader2 className="h-4 w-4 animate-spin"/>:<Play className="h-4 w-4"/>}</Button>
+                                <Button size="icon" variant="ghost" className="hover:bg-muted" onClick={() => copyThread(et)}>{config.copiedStates && config.copiedStates[`thread-${et.id}`]?<Check className="h-4 w-4 text-green-600"/>:<Copy className="h-4 w-4"/>}</Button>
+                              </div>
+                            </div>
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200 bg-white">
+                      {biosArray.map(bioName => (
+                        <tr key={bioName}>
+                          <td className="sticky left-0 bg-white whitespace-nowrap px-4 py-2 text-sm font-medium text-gray-900" style={{width: BIO_COL_WIDTH, minWidth: BIO_COL_WIDTH}}>{bioName}</td>
+                          {turn.executionThreads.map(et => (
+                            <td key={et.id} style={{width: THREAD_COL_WIDTH, minWidth: THREAD_COL_WIDTH}} className="whitespace-normal px-4 py-2 text-sm text-gray-500 align-top border-l border-gray-200">
+                              {getCellContent(et, bioName)}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <ScrollBar orientation="horizontal" />
+                </ScrollArea>
+              </div>
+            );
+          })()}
+
+          {/* Add Turn Button */}
+          <div className="flex justify-center">
+            <Button onClick={handleAddTurn} variant="secondary" className="flex items-center gap-2">
+              <Plus className="h-4 w-4" /> Add Turn
+            </Button>
+          </div>
+
+          {/* End of turn section */}
+        </div>
+      ))}
     </div>
   );
 }

@@ -190,6 +190,8 @@ export interface PipelineConfig {
   initialMessageThreads: InitialMessageThread[];
   userMessageThreads: UserMessageThread[];
   executionThreads: ExecutionThread[];
+  /** Additional conversation turns beyond the first (which uses userMessageThreads). */
+  turns?: ConversationTurn[];
   openSections: {
     models: boolean;
     data: boolean;
@@ -199,6 +201,13 @@ export interface PipelineConfig {
     results: boolean;
   };
   copiedStates: Record<string, boolean>;
+}
+
+export interface ConversationTurn {
+  id: string;
+  name: string;
+  userMessageThreads: UserMessageThread[];
+  executionThreads: ExecutionThread[];
 }
 
 export interface ThreadableSectionProps<T> {

@@ -204,7 +204,8 @@ Guide users to share stories from their life by adapting to their natural storyt
       userMessages: false,
       results: false
     },
-    copiedStates: {}
+    copiedStates: {},
+    turns: []
   };
 }
 
@@ -212,6 +213,7 @@ Guide users to share stories from their life by adapting to their natural storyt
  * Update execution threads when pipeline threads change
  */
 export function updateExecutionThreads(config: PipelineConfig): PipelineConfig {
+  // Base (turn 0)
   const newExecutionThreads = generateExecutionThreads(
     config.modelThreads,
     config.dataThreads,
@@ -219,10 +221,26 @@ export function updateExecutionThreads(config: PipelineConfig): PipelineConfig {
     config.initialMessageThreads,
     config.userMessageThreads
   );
+
+  // Update additional turns if present
+  let newTurns = config.turns;
+  if (config.turns && Array.isArray(config.turns)) {
+    newTurns = config.turns.map(turn => ({
+      ...turn,
+      executionThreads: generateExecutionThreads(
+        config.modelThreads,
+        config.dataThreads,
+        config.systemPromptThreads,
+        config.initialMessageThreads,
+        turn.userMessageThreads
+      )
+    }));
+  }
   
   return {
     ...config,
-    executionThreads: newExecutionThreads
+    executionThreads: newExecutionThreads,
+    turns: newTurns
   };
 }
 
