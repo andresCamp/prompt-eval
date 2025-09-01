@@ -1,0 +1,502 @@
+---
+description: Use this guide when implementing any feature that requires users to upload, preview, or crop photos. This includes profile pictures, story images, document uploads, or any other image upload functionality
+globs: 
+alwaysApply: false
+---
+# Photo Upload Implementation Guide
+
+This guide explains how to implement photo upload functionality in the application, including drag-and-drop, file selection, cropping, and form integration.
+
+## Component Architecture
+
+The photo upload system consists of several modular components in the `components/photo-v2` directory:
+
+1. **usePhotoUpload** - A custom hook that manages the photo upload state and provides utility functions
+2. **DragZone** - A component for drag-and-drop file selection with validation
+3. **DisplayZone** - A component for displaying the uploaded/cropped image with hover effects
+4. **CropModal** - A modal for cropping the uploaded image with circular or rectangular options
+5. **PhotoUpload** - A wrapper component that combines all of the above (in `app/(pages)/onboarding/photo-upload.tsx`)
+
+## Implementation Approaches
+
+There are two main approaches to implementing photo upload functionality:
+
+### Approach 1: Integrated Component
+
+For simple use cases where the photo upload is part of a larger form, create a dedicated component that encapsulates all the photo upload functionality:
+
+```tsx
+// components/photo-upload-component.tsx
+import React, { useState } from 'react';
+import Image from 'next/image';
+import { Button } from '@/components/ui/button';
+import { HiMiniPlus } from "react-icons/hi2";
+import { useFormContext } from "react-hook-form";
+import { usePhotoUpload } from '@/components/photo-v2/usePhotoUpload';
+import { CropModal } from '@/components/photo-v2/crop-modal';
+
+interface PhotoUploadComponentProps {
+  fieldName: string; // Form field name to update
+  isSelected?: boolean; // Whether this option is currently selected
+  customImage?: string; // Current image if any
+  onSelect?: () => void; // Callback when selected
+  aspectRatio?: number; // Aspect ratio for cropping (default: 1)
+  cropShape?: 'round' | 'rect'; // Shape of crop area (default: 'round')
+}
+
+export const PhotoUploadComponent = ({ 
+  fieldName,
+  isSelected,
+  customImage,
+  onSelect,
+  aspectRatio = 1,
+  cropShape = 'round'
+}: PhotoUploadComponentProps) => {
+  const form = useFormContext();
+  const [isCropOpen, setIsCropOpen] = useState(false);
+  
+  // Use the photo upload hook
+  const { 
+    originalUrl, 
+    setOriginalPhoto, 
+    setCroppedPhoto,
+    triggerFileSelect,
+    fileInputProps
+  } = usePhotoUpload({
+    onCrop: (croppedUrl: string) => {
+      // Update the form with the cropped image
+      form.setValue(fieldName, croppedUrl, { shouldValidate: true });
+      // Call the onSelect callback if provided
+      if (onSelect) onSelect();
+    }
+  });
+
+  const handlePhotoSelect = (file: File) => {
+    setOriginalPhoto(file);
+    setIsCropOpen(true);
+  };
+
+  return (
+    <div className="w-full">
+      {/* Custom upload card */}
+      <div 
+        className={`relative w-full cursor-pointer hover:opacity-90 transition-opacity ${isSelected ? 'ring-4 ring-primary rounded-lg' : ''}`}
+        onClick={customImage ? onSelect : triggerFileSelect}
+      >
+        <div className="relative w-full" style={{ paddingBottom: "100%" }}>
+          {customImage ? (
+            <div className="absolute inset-0 rounded-lg overflow-hidden">
+              <Image 
+                src={customImage}
+                alt="Uploaded image"
+                fill
+                className="object-cover"
+              />
+              <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 hover:opacity-100 transition-opacity">
+                <Button 
+                  variant="secondary" 
+                  className="bg-white/90 hover:bg-white"
+                  onClick={(e) => {
+                    e.stopPropagation(); // Prevent triggering the card's onClick
+                    triggerFileSelect();
+                  }}
+                >
+                  Change Image
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="absolute inset-0 rounded-lg border-2 border-dashed border-zinc-300 flex flex-col items-center justify-center bg-zinc-50">
+              <div className="flex flex-col items-center">
+                <div className="bg-zinc-100 rounded-full p-3 mb-2">
+                  <HiMiniPlus className="w-6 h-6 text-zinc-500" />
+                </div>
+                <p className="text-zinc-600 font-medium">Upload Image</p>
+                <p className="text-zinc-400 text-sm mt-1">Click to browse files</p>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+      
+      {/* Hidden file input */}
+      <input {...fileInputProps} onChange={(e) => {
+        const file = e.target.files?.[0];
+        if (file) handlePhotoSelect(file);
+      }} />
+      
+      {/* Crop modal */}
+      {originalUrl && (
+        <CropModal
+          imageUrl={originalUrl}
+          onCrop={setCroppedPhoto}
+          aspectRatio={aspectRatio}
+          cropShape={cropShape}
+          open={isCropOpen}
+          onOpenChange={setIsCropOpen}
+        />
+      )}
+    </div>
+  );
+};
+```
+
+### Approach 2: Full-Featured Component
+
+For more complex use cases, create a comprehensive component with drag-and-drop support:
+
+```tsx
+// components/photo-upload.tsx
+import { useState } from "react"
+import { HiCloudArrowUp } from "react-icons/hi2"
+import { DisplayZone } from "@/components/photo-v2/display-zone"
+import { usePhotoUpload } from "@/components/photo-v2/usePhotoUpload"
+import { DragZone } from "@/components/photo-v2/drag-zone"
+import { CropModal } from "@/components/photo-v2/crop-modal"
+import { Button } from "@/components/ui/button"
+
+interface PhotoUploadProps {
+  value?: string
+  onChange?: (value: string) => void
+  error?: string
+  aspectRatio?: number
+  cropShape?: 'round' | 'rect'
+}
+
+export default function PhotoUpload({ 
+  value, 
+  onChange, 
+  error,
+  aspectRatio = 1,
+  cropShape = 'round'
+}: PhotoUploadProps) {
+  const { 
+    originalUrl, 
+    croppedUrl, 
+    setOriginalPhoto, 
+    setCroppedPhoto,
+    hasPhoto,
+    triggerFileSelect,
+    fileInputProps
+  } = usePhotoUpload({
+    onCrop: (croppedUrl) => {
+      // Update the parent form when a photo is cropped
+      onChange?.(croppedUrl)
+    }
+  })
+  const [isDragging, setIsDragging] = useState(false)
+  const [isCropOpen, setIsCropOpen] = useState(false)
+
+  const handlePhotoSelect = (file: File) => {
+    setOriginalPhoto(file)
+    setIsCropOpen(true)
+  }
+
+  return (
+    <div className="flex flex-col items-center">
+      <input {...fileInputProps} onChange={(e) => {
+        const file = e.target.files?.[0]
+        if (file) handlePhotoSelect(file)
+      }} />
+
+      {!hasPhoto ? (
+        <>
+          <DragZone
+            onFileSelect={handlePhotoSelect}
+            className="w-[216px] h-[216px] rounded-full cursor-pointer"
+            onDragStateChange={setIsDragging}
+            onClick={triggerFileSelect}
+          >
+            {/* Drag zone content */}
+          </DragZone>
+
+          <Button
+            onClick={triggerFileSelect}
+            className="mt-6 h-[40px] w-[216px]"
+            variant="secondary"
+          >
+            Upload Photo
+          </Button>
+        </>
+      ) : (
+        <div className="flex flex-col items-center gap-6">
+          <div className="relative">
+            <DisplayZone
+              imageUrl={croppedUrl || originalUrl!}
+              aspectRatio={aspectRatio}
+              className="w-[216px] h-[216px] rounded-full"
+              onReupload={triggerFileSelect}
+            />
+
+            <CropModal
+              imageUrl={originalUrl!}
+              onCrop={setCroppedPhoto}
+              aspectRatio={aspectRatio}
+              cropShape={cropShape}
+              open={isCropOpen}
+              onOpenChange={setIsCropOpen}
+            />
+          </div>
+
+          <Button
+            onClick={triggerFileSelect}
+            variant="secondary"
+            className="w-[216px]"
+          >
+            Change Photo
+          </Button>
+        </div>
+      )}
+      
+      {error && (
+        <p className="text-sm text-red-500 font-medium mt-2">{error}</p>
+      )}
+    </div>
+  )
+}
+```
+
+## AWS S3 Storage and Retrieval
+
+Photo uploads leverage AWS S3 for persistent storage. Here's how it works:
+
+1.  **Upload Utility**: The `uploadFile` function in `utils/s3-utils.ts` takes the image buffer, desired filename, content type, and the bucket name (from `process.env.AWS_BUCKET_NAME`). It uploads the file to the specified S3 bucket.
+2.  **URL Generation**: After a successful upload, `uploadFile` returns a standard S3 public URL in the format `https://<bucket-name>.s3.amazonaws.com/<file-name>`.
+3.  **Database Storage**: GraphQL mutations (e.g., `uploadPhotoByUsername`) call `uploadFile` and store the returned S3 URL in the `url` field of the `Photo` model in the Prisma database.
+4.  **Frontend Retrieval**: Frontend components use GraphQL queries (like `GET_STORY_BY_SLUG`) to fetch story data, which includes the `photos` array. Each photo object contains the `url` field with the S3 link.
+5.  **Rendering with Next.js Image**: The fetched S3 URL is passed to the `src` prop of the `next/image` component for optimized image rendering.
+
+### Important: Next.js Configuration
+
+For `next/image` to load images from S3, you **must** configure the S3 hostname in your `next.config.ts` file. Add an entry to the `images.remotePatterns` array:
+
+```typescript
+// next.config.ts
+import type { NextConfig } from "next"
+
+const nextConfig: NextConfig = {
+  images: {
+    remotePatterns: [
+      // ... other patterns
+      {
+        protocol: 'https',
+        // Replace with your actual bucket name and region if different
+        hostname: 'mystory-v2-bucket.s3.amazonaws.com',
+      },
+    ],
+  },
+}
+
+export default nextConfig
+```
+
+**Failure to configure this will result in image loading errors.**
+
+## Special Case: Gift Card Image Upload
+
+For gift card image uploads, create a specialized component that:
+
+1. Spans the full width of the container
+2. Has a different aspect ratio (typically 1.6:1 for gift cards)
+3. Uses rectangular cropping
+4. Integrates with the form context
+
+```tsx
+// components/gift-card-upload.tsx
+import React, { useState } from 'react';
+import Image from 'next/image';
+import { Button } from '@/components/ui/button';
+import { HiMiniPlus } from "react-icons/hi2";
+import { useFormContext } from "react-hook-form";
+import { usePhotoUpload } from '@/components/photo-v2/usePhotoUpload';
+import { CropModal } from '@/components/photo-v2/crop-modal';
+
+interface GiftCardUploadProps {
+  selectedRecipientIndex: number;
+  isSelected: boolean;
+  customImage?: string;
+  onSelect: () => void;
+}
+
+export const GiftCardUpload = ({ 
+  selectedRecipientIndex,
+  isSelected,
+  customImage,
+  onSelect
+}: GiftCardUploadProps) => {
+  const form = useFormContext();
+  const [isCropOpen, setIsCropOpen] = useState(false);
+  
+  // Use the photo upload hook
+  const { 
+    originalUrl, 
+    setOriginalPhoto, 
+    setCroppedPhoto,
+    triggerFileSelect,
+    fileInputProps
+  } = usePhotoUpload({
+    onCrop: (croppedUrl: string) => {
+      // Update the form with the cropped image
+      form.setValue(`recipients.${selectedRecipientIndex}.customGiftCardImage`, croppedUrl, { shouldValidate: true });
+      // Also set this as the selected card
+      form.setValue(`recipients.${selectedRecipientIndex}.selectedGiftCard`, "custom", { shouldValidate: true });
+    }
+  });
+
+  const handlePhotoSelect = (file: File) => {
+    setOriginalPhoto(file);
+    setIsCropOpen(true);
+  };
+
+  return (
+    <div className="w-full">
+      {/* Custom upload card */}
+      <div 
+        className={`relative w-full cursor-pointer hover:opacity-90 transition-opacity ${isSelected ? 'ring-4 ring-wheat rounded-lg' : ''}`}
+        onClick={customImage ? onSelect : triggerFileSelect}
+      >
+        <div className="relative w-full" style={{ paddingBottom: "25%" }}>
+          {customImage ? (
+            <div className="absolute inset-0 rounded-lg overflow-hidden">
+              <Image 
+                src={customImage}
+                alt="Custom gift card"
+                fill
+                className="object-cover"
+              />
+              <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 hover:opacity-100 transition-opacity">
+                <Button 
+                  variant="secondary" 
+                  className="bg-white/90 hover:bg-white text-zinc-800 font-medium"
+                  onClick={(e) => {
+                    e.stopPropagation(); // Prevent triggering the card's onClick
+                    triggerFileSelect();
+                  }}
+                >
+                  Change Image
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="absolute inset-0 rounded-lg border-2 border-dashed border-zinc-300 flex flex-col items-center justify-center bg-zinc-50">
+              <div className="flex flex-col items-center">
+                <div className="bg-zinc-100 rounded-full p-3 mb-2">
+                  <HiMiniPlus className="w-6 h-6 text-zinc-500" />
+                </div>
+                <p className="text-zinc-600 font-medium">Upload Custom Design</p>
+                <p className="text-zinc-400 text-sm mt-1">Upload your own image for the gift card</p>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+      
+      {/* Hidden file input */}
+      <input {...fileInputProps} onChange={(e) => {
+        const file = e.target.files?.[0];
+        if (file) handlePhotoSelect(file);
+      }} />
+      
+      {/* Crop modal */}
+      {originalUrl && (
+        <CropModal
+          imageUrl={originalUrl}
+          onCrop={setCroppedPhoto}
+          aspectRatio={1.6} // Match the gift card aspect ratio
+          cropShape="rect"
+          open={isCropOpen}
+          onOpenChange={setIsCropOpen}
+        />
+      )}
+    </div>
+  );
+};
+```
+
+## Integration with Email Services
+
+When using photo uploads with email services like Resend:
+
+1. **For base64 images** (custom uploads):
+   - You can embed them directly in HTML emails using data URLs:
+     ```html
+     <img src="data:image/jpeg;base64,YOUR_BASE64_STRING" alt="Custom Image" />
+     ```
+   - Be aware of size limitations in email clients (typically 100KB-1MB)
+   - Consider uploading to a storage service for better compatibility
+
+2. **For static images** (like standard gift card images):
+   - Use absolute URLs that point to your deployed application:
+     ```javascript
+     const baseUrl = "https://yourdomain.com";
+     const absoluteImageUrl = `${baseUrl}${imagePath}`;
+     ```
+   - These are more email-client friendly than base64 encoding
+
+## Common Issues and Solutions
+
+1. **TypeScript Import Errors**:
+   - When creating a new component file, you may need to restart the TypeScript server
+   - Use absolute imports with the `@/` prefix for better reliability
+
+2. **Component Organization**:
+   - For reusable components, place them in the `components/` directory
+   - For page-specific components, consider placing them in the same directory as the page
+
+3. **Form Integration**:
+   - Always use `shouldValidate: true` when setting form values to trigger validation
+   - Use the `useFormContext` hook to access the form in nested components
+
+4. **Memory Management**:
+   - The `usePhotoUpload` hook handles cleanup of object URLs
+   - Ensure the component using this hook is properly unmounted
+
+5. **Styling Considerations**:
+   - For gift cards, use a rectangular aspect ratio (1.6:1)
+   - For profile pictures, use a circular crop (1:1)
+   - Adjust padding-bottom for proper aspect ratio in responsive designs
+
+## Core Hook: usePhotoUpload
+
+The `usePhotoUpload` hook is the foundation of the photo upload system:
+
+```tsx
+import { usePhotoUpload } from "@/components/photo-v2/usePhotoUpload"
+
+// Basic usage
+const { 
+  originalUrl,       // URL of the original photo (from URL.createObjectURL)
+  croppedUrl,        // URL of the cropped photo (base64 data URL)
+  setOriginalPhoto,  // Function to set a new photo
+  setCroppedPhoto,   // Function to set the cropped version
+  hasPhoto,          // Boolean indicating if a photo is selected
+  hasCroppedPhoto,   // Boolean indicating if a photo has been cropped
+  reset,             // Function to reset the state and clean up URLs
+  triggerFileSelect, // Function to open file dialog
+  fileInputRef,      // Ref to the file input element
+  fileInputProps     // Props to spread on an input[type="file"]
+} = usePhotoUpload({
+  onUpload: (file) => console.log('Photo uploaded:', file),
+  onCrop: (url) => console.log('Photo cropped:', url)
+})
+```
+
+## Component Props Reference
+
+### usePhotoUpload Options
+
+| Option | Type | Description |
+|-----|---|----|
+| `onUpload` | `(file: File) => void` | Callback fired when a photo is uploaded |
+| `onCrop` | `(croppedUrl: string) => void` | Callback fired when a photo is cropped |
+
+### CropModal Props
+
+| Prop | Type | Default | Description |
+|---|---|---|----|
+| `imageUrl` | `string` | Required | URL of the image to crop |
+| `onCrop` | `(croppedUrl: string) => void` | Required | Callback when cropping is complete |
+| `aspectRatio` | `number` | `1` | Aspect ratio for the crop area |
+| `cropShape` | `'round' \| 'rect'` | `'round'` | Shape of the crop selector |
+| `open` | `boolean` | - | Controls the open state of the modal |
+| `onOpenChange` | `(open: boolean) => void` | - | Callback when the open state changes |

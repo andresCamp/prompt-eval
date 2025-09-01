@@ -23,6 +23,7 @@ export { CollapsibleCard } from './shared/CollapsibleCard';
 export { CopyButton } from './shared/CopyButton';
 export { MetricsBadge } from './shared/MetricsBadge';
 export { ModelSelector } from './shared/ModelSelector';
+export { VisibilityToggle } from './shared/VisibilityToggle';
 
 // Export types
 export type {
@@ -43,6 +44,9 @@ export {
   replaceTemplate,
   generateId,
   generateExecutionThreads,
+  generateVisibleExecutionThreads,
+  calculateCombinationCount,
+  createExecutionBatches,
   getGridCols,
   createDefaultPipelineConfig,
   updateExecutionThreads

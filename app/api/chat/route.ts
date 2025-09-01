@@ -52,14 +52,20 @@ export async function POST(req: Request) {
       );
     }
 
-    const { text } = await generateText({
+    const { text, usage } = await generateText({
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       model: providerFactory(model) as any,
       messages,
       temperature: 0.7,
     });
 
-    return new Response(text);
+    // Return both text and usage data
+    return new Response(JSON.stringify({
+      text,
+      usage
+    }), {
+      headers: { 'Content-Type': 'application/json' }
+    });
   } catch (error) {
     console.error('Chat API error:', error);
     return new Response(

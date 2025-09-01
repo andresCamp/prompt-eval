@@ -1,0 +1,13 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+
+# Package Manager Enforcement Rule
+
+When recommending package installation commands in the AI Pane:
+  - Always use pnpm (e.g., "pnpm add <package>" for adding dependencies, "pnpm install" for installing all packages).
+  - Do not suggest alternatives such as "npm install" or "yarn add".
+  
+When fixing build errors, operate under the assumption that the errors stem from recently made changes. So instead of banadaging the solution, pinpoint what changes were made that are breaking the code and then reimplement them in a way that will pass build

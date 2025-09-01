@@ -12,6 +12,7 @@ import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ChevronDown, Copy, Trash2, Plus, Check } from 'lucide-react';
+import { VisibilityToggle } from './VisibilityToggle';
 
 interface CollapsibleCardProps {
   id: string;
@@ -27,6 +28,10 @@ interface CollapsibleCardProps {
   icon: React.ReactNode;
   copied?: boolean;
   defaultOpen?: boolean;
+  // New visibility props
+  visible?: boolean;
+  onVisibilityToggle?: () => void;
+  showVisibilityToggle?: boolean;
 }
 
 export function CollapsibleCard({
@@ -42,7 +47,10 @@ export function CollapsibleCard({
   subtitle,
   icon,
   copied = false,
-  defaultOpen = true
+  defaultOpen = false,
+  visible = true,
+  onVisibilityToggle,
+  showVisibilityToggle = true
 }: CollapsibleCardProps) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
 
@@ -51,10 +59,12 @@ export function CollapsibleCard({
   };
 
   const cardCursor = isOpen ? 'cursor-n-resize' : 'cursor-s-resize';
+  const cardOpacity = visible ? 'opacity-100' : 'opacity-60';
+  const cardBorder = visible ? borderColor : 'border-gray-300';
 
   return (
     <Card
-      className={`w-full self-start border-2 ${borderColor} ${cardCursor} hover:bg-muted transition-colors`}
+      className={`w-full self-start border-2 ${cardBorder} ${cardCursor} ${cardOpacity} hover:bg-muted transition-all`}
       onClick={toggleOpen}
     >
       <CardHeader className="pb-2">
@@ -77,40 +87,56 @@ export function CollapsibleCard({
           </div>
           {subtitle && <span className="text-[10px] text-gray-500 ml-6">{subtitle}</span>}
           </div>
-          <div className="flex gap-1">
+          <div className="flex items-center gap-1">
+            <ChevronDown 
+              className={`h-4 w-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} 
+            />
+            {/* Visibility Toggle */}
+            {showVisibilityToggle && onVisibilityToggle && (
+              <VisibilityToggle
+                visible={visible}
+                onToggle={onVisibilityToggle}
+              />
+            )}
             <Button
-              size="sm"
               variant="ghost"
+              size="sm"
               onClick={(e) => {
                 e.stopPropagation();
                 onCopy();
               }}
+              className="h-8 w-8 p-0 cursor-pointer hover:bg-muted hover:scale-105 transition-all"
             >
-              {copied ? <Check className="h-3 w-3 text-green-600" /> : <Copy className="h-3 w-3" />}
+              {copied ? (
+                <Check className="h-4 w-4 text-green-600" />
+              ) : (
+                <Copy className="h-4 w-4" />
+              )}
             </Button>
             <Button
-              size="sm"
               variant="ghost"
+              size="sm"
               onClick={(e) => {
                 e.stopPropagation();
                 onDuplicate();
               }}
+              className="h-8 w-8 p-0 cursor-pointer hover:bg-muted hover:scale-105 transition-all"
             >
-              <Plus className="h-3 w-3" />
+              <Plus className="h-4 w-4" />
             </Button>
             {canDelete && (
               <Button
-                size="sm"
                 variant="ghost"
+                size="sm"
                 onClick={(e) => {
                   e.stopPropagation();
                   onDelete();
                 }}
+                className="h-8 w-8 p-0 cursor-pointer hover:bg-destructive hover:text-destructive-foreground hover:scale-105 transition-all"
               >
-                <Trash2 className="h-3 w-3" />
+                <Trash2 className="h-4 w-4" />
               </Button>
             )}
-            <ChevronDown className={`h-4 w-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
           </div>
         </div>
       </CardHeader>

@@ -213,11 +213,12 @@ function ResponseCard({
         <h4 className="font-medium text-sm">{response.name}</h4>
         <div className="flex items-center gap-1">
           {response.duration && (
-            <MetricsBadge
-              duration={response.duration}
-              tokenCount={response.tokenCount}
-              wordCount={response.wordCount}
-            />
+                      <MetricsBadge
+            duration={response.duration}
+            tokenCount={response.tokenCount}
+            wordCount={response.wordCount}
+            cost={response.cost}
+          />
           )}
           <CopyButton
             text={response.response}

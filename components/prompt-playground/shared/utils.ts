@@ -32,6 +32,46 @@ export const estimateTokens = (text: string): number => {
 };
 
 /**
+ * Calculate cost based on model, prompt tokens, and completion tokens
+ * Prices are based on current provider pricing (as of 2025)
+ */
+export const calculateCost = (
+  model: string,
+  promptTokens: number = 0,
+  completionTokens: number = 0
+): number => {
+  // Pricing per 1M tokens (input/output) in USD
+  const modelPricing: Record<string, { input: number; output: number }> = {
+    // Anthropic models
+    'claude-sonnet-4-20250514': { input: 15.0, output: 75.0 },
+    'claude-3-7-sonnet-20250219': { input: 15.0, output: 75.0 },
+    'claude-3-5-sonnet-20241022': { input: 3.0, output: 15.0 },
+    
+    // Google models
+    'gemini-2.5-flash': { input: 0.075, output: 0.3 },
+    'gemini-2.5-flash-lite-preview-06-17': { input: 0.0375, output: 0.15 },
+    
+    // OpenAI models
+    'gpt-4o': { input: 5.0, output: 15.0 },
+    
+    // Groq models (typically free or very low cost)
+    'moonshotai/kimi-k2-instruct': { input: 0.1, output: 0.1 },
+  };
+
+  const pricing = modelPricing[model];
+  if (!pricing) {
+    // Default fallback pricing for unknown models
+    return (promptTokens * 0.001 + completionTokens * 0.002) / 1000;
+  }
+
+  // Calculate cost: (tokens / 1,000,000) * price_per_1M_tokens
+  const inputCost = (promptTokens / 1_000_000) * pricing.input;
+  const outputCost = (completionTokens / 1_000_000) * pricing.output;
+  
+  return inputCost + outputCost;
+};
+
+/**
  * Biographer data structure for template replacement
  */
 interface BiographerData {
@@ -80,6 +120,7 @@ export function generateId(): string {
 
 /**
  * Generate all possible execution thread combinations from pipeline threads
+ * Now supports visibility filtering - only visible threads will be included in combinations
  */
 export function generateExecutionThreads(
   modelThreads: ModelThread[],
@@ -90,12 +131,19 @@ export function generateExecutionThreads(
 ): ExecutionThread[] {
   const executionThreads: ExecutionThread[] = [];
   
+  // Filter only visible threads for combination generation
+  const visibleModelThreads = modelThreads.filter(t => t.visible);
+  const visibleDataThreads = dataThreads.filter(t => t.visible);
+  const visibleSystemPromptThreads = systemPromptThreads.filter(t => t.visible);
+  const visibleInitialMessageThreads = initialMessageThreads.filter(t => t.visible);
+  const visibleUserMessageThreads = userMessageThreads.filter(t => t.visible);
+  
   // Generate all combinations using nested loops
-  for (const modelThread of modelThreads) {
-    for (const dataThread of dataThreads) {
-      for (const systemPromptThread of systemPromptThreads) {
-        for (const initialMessageThread of initialMessageThreads) {
-          for (const userMessageThread of userMessageThreads) {
+  for (const modelThread of visibleModelThreads) {
+    for (const dataThread of visibleDataThreads) {
+      for (const systemPromptThread of visibleSystemPromptThreads) {
+        for (const initialMessageThread of visibleInitialMessageThreads) {
+          for (const userMessageThread of visibleUserMessageThreads) {
             const threadName = [
               modelThread.name,
               dataThread.name,
@@ -114,7 +162,8 @@ export function generateExecutionThreads(
               userMessageThread,
               responses: [],
               isRunning: false,
-              copiedStates: {}
+              copiedStates: {},
+              visible: true // New execution threads are visible by default
             });
           }
         }
@@ -123,6 +172,102 @@ export function generateExecutionThreads(
   }
   
   return executionThreads;
+}
+
+/**
+ * Generate visible execution threads based on section visibility settings
+ * This is used for the flexible combo system
+ */
+export function generateVisibleExecutionThreads(
+  config: PipelineConfig
+): ExecutionThread[] {
+  // Use default values for hidden sections
+  const modelThreads = config.visibility.models ? config.modelThreads.filter(t => t.visible) : [getDefaultModelThread()];
+  const dataThreads = config.visibility.data ? config.dataThreads.filter(t => t.visible) : [getDefaultDataThread()];
+  const systemPromptThreads = config.visibility.systemPrompts ? config.systemPromptThreads.filter(t => t.visible) : [getDefaultSystemPromptThread()];
+  const initialMessageThreads = config.visibility.initialMessages ? config.initialMessageThreads.filter(t => t.visible) : [getDefaultInitialMessageThread()];
+  const userMessageThreads = config.visibility.userMessages ? config.userMessageThreads.filter(t => t.visible) : [getDefaultUserMessageThread()];
+
+  return generateExecutionThreads(
+    modelThreads,
+    dataThreads,
+    systemPromptThreads,
+    initialMessageThreads,
+    userMessageThreads
+  );
+}
+
+/**
+ * Calculate total possible combinations based on visibility
+ */
+export function calculateCombinationCount(config: PipelineConfig): number {
+  const visibleModelThreads = config.visibility.models ? config.modelThreads.filter(t => t.visible).length : 1;
+  const visibleDataThreads = config.visibility.data ? config.dataThreads.filter(t => t.visible).length : 1;
+  const visibleSystemPromptThreads = config.visibility.systemPrompts ? config.systemPromptThreads.filter(t => t.visible).length : 1;
+  const visibleInitialMessageThreads = config.visibility.initialMessages ? config.initialMessageThreads.filter(t => t.visible).length : 1;
+  const visibleUserMessageThreads = config.visibility.userMessages ? config.userMessageThreads.filter(t => t.visible).length : 1;
+
+  return visibleModelThreads * visibleDataThreads * visibleSystemPromptThreads * visibleInitialMessageThreads * visibleUserMessageThreads;
+}
+
+/**
+ * Split execution threads into batches for rate limiting
+ */
+export function createExecutionBatches(threads: ExecutionThread[], batchSize: number): ExecutionThread[][] {
+  const batches: ExecutionThread[][] = [];
+  for (let i = 0; i < threads.length; i += batchSize) {
+    batches.push(threads.slice(i, i + batchSize));
+  }
+  return batches;
+}
+
+/**
+ * Default thread factories for hidden sections
+ */
+function getDefaultModelThread(): ModelThread {
+  return {
+    id: 'default-model',
+    name: 'Default GPT-4o',
+    provider: 'openai',
+    model: 'gpt-4o',
+    visible: false
+  };
+}
+
+function getDefaultDataThread(): DataThread {
+  return {
+    id: 'default-data',
+    name: 'Default Data',
+    data: JSON.stringify([{ name: "Default", mbti: "ENFJ", enneagram: "2w3" }], null, 2),
+    visible: false
+  };
+}
+
+function getDefaultSystemPromptThread(): SystemPromptThread {
+  return {
+    id: 'default-system',
+    name: 'Default System',
+    prompt: 'You are a helpful AI assistant.',
+    visible: false
+  };
+}
+
+function getDefaultInitialMessageThread(): InitialMessageThread {
+  return {
+    id: 'default-initial',
+    name: 'Default Initial',
+    message: 'Hello! How can I help you today?',
+    visible: false
+  };
+}
+
+function getDefaultUserMessageThread(): UserMessageThread {
+  return {
+    id: 'default-user',
+    name: 'Default User',
+    message: 'Hello, I would like to share some stories.',
+    visible: false
+  };
 }
 
 /**
@@ -148,7 +293,8 @@ export function createDefaultPipelineConfig(): PipelineConfig {
         id: generateId(),
         name: 'GPT-4o',
         provider: 'openai',
-        model: 'gpt-4o'
+        model: 'gpt-4o',
+        visible: true
       }
     ],
     dataThreads: [
@@ -162,7 +308,8 @@ export function createDefaultPipelineConfig(): PipelineConfig {
             enneagram: "2w3",
             // ... default biographer data
           }
-        ], null, 2)
+        ], null, 2),
+        visible: true
       }
     ],
     systemPromptThreads: [
@@ -178,21 +325,24 @@ Enneagram: \${enneagram}
 
 <primary_objective>
 Guide users to share stories from their life by adapting to their natural storytelling flow.
-</primary_objective>`
+</primary_objective>`,
+        visible: true
       }
     ],
     initialMessageThreads: [
       {
         id: generateId(),
         name: 'Default Initial',
-        message: `Hello \${userPreferred}, welcome to our first session together! My name is \${name}, your personal biographer.`
+        message: `Hello \${userPreferred}, welcome to our first session together! My name is \${name}, your personal biographer.`,
+        visible: true
       }
     ],
     userMessageThreads: [
       {
         id: generateId(),
         name: 'Default User',
-        message: `Let's see, I was born in Philadelphia in 1999. I have a couple memories from my childhood.`
+        message: `Let's see, I was born in Philadelphia in 1999. I have a couple memories from my childhood.`,
+        visible: true
       }
     ],
     executionThreads: [],
@@ -203,6 +353,17 @@ Guide users to share stories from their life by adapting to their natural storyt
       initialMessages: false,
       userMessages: false,
       results: false
+    },
+    visibility: {
+      models: true,
+      data: true,
+      systemPrompts: true,
+      initialMessages: true,
+      userMessages: true
+    },
+    batchConfig: {
+      maxConcurrent: 10,
+      batchSize: 5
     },
     copiedStates: {},
     turns: []

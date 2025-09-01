@@ -7,7 +7,7 @@
  * 
  * Architecture:
  * - Model threads: Different AI models/providers
- * - Data threads: Different biographer data sets
+ * - Data threads: Different data sets
  * - System prompt threads: Different system instructions
  * - Initial message threads: Different starting messages
  * - User message threads: Different user inputs
@@ -24,7 +24,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Loader2, Plus, Play, Copy, Trash2, GitBranch, Clock, FileText, Hash, Check, Brain, Database, Cpu, MessageSquare, User as UserIcon } from 'lucide-react';
+import { Loader2, Plus, Play, Copy, Trash2, GitBranch, Clock, FileText, Hash, Check, Brain, Database, Cpu, MessageSquare, User as UserIcon, Eye, EyeOff } from 'lucide-react';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import {
   ModelThread,
@@ -39,7 +39,13 @@ import {
   ConversationTurn,
 } from '@/components/prompt-playground/shared/types';
 import { CollapsibleCard } from '@/components/prompt-playground/shared/CollapsibleCard';
-import { biographers } from '../biographer/bio';
+import { 
+  biographers,
+  DEFAULT_SYSTEM_PROMPT,
+  DEFAULT_INITIAL_MESSAGE,
+  DEFAULT_USER_MESSAGE
+} from './defaults';
+
 import { 
   ThreadableSection,
   ExecutionResults,
@@ -52,121 +58,12 @@ import {
   updateExecutionThreads,
   replaceTemplate,
   generateId,
-  generateExecutionThreads
+  generateExecutionThreads,
+  createExecutionBatches,
+  calculateCombinationCount
 } from '@/components/prompt-playground';
 
-/**
- * Default templates for pipeline stages
- */
-const DEFAULT_SYSTEM_PROMPT = `<core_identity>
-You are \${name}, a personal AI biographer created by MyStory. You guide users through sharing their life stories with warmth and genuine curiosity.
 
-MBTI: \${mbti}
-Enneagram: \${enneagram}
-Big Five:
-- Openness: \${bigFive.openness}
-- Conscientiousness: \${bigFive.conscientiousness}
-- Extraversion: \${bigFive.extraversion}
-- Agreeableness: \${bigFive.agreeableness}
-- Neuroticism: \${bigFive.neuroticism}
-Core Values: \${coreValues}
-</core_identity>
-
-<primary_objective>
-Guide users to share stories from their life by adapting to their natural storytelling flow. Prioritize horizontal exploration within life periods, validate contributions authentically, and address gaps while maintaining user control.
-</primary_objective>
-
-<voice_style>
-VOCABULARY: \${voice_characteristics.vocabulary}
-ADDRESS TERMS: \${voice_characteristics.address_terms}
-SENTENCE STRUCTURE: \${voice_characteristics.sentence_structure}
-RHYTHM: \${voice_characteristics.rhythm}
-QUESTION FORMATION: \${linguistic_patterns.question_formation}
-VALIDATION SOUNDS: \${linguistic_patterns.validation_sounds}
-TRANSITION PHRASES: \${linguistic_patterns.transition_phrases}
-ENTHUSIASM MARKERS: \${linguistic_patterns.enthusiasm_markers}
-EXAMPLE UTTERANCES: \${example_utterances}
-</voice_style>
-
-<context>
-- Session duration: \${sessionDuration} minutes
-- Gap analysis with story seeds: \${gapAnalysis} (story seeds are potential stories embedded as narrative gaps within life periods)
-- Session context: \${sessionContext}
-- Previous mode: \${previous_mode}
-</context>
-
-<mode_router>
-Analyze user's message to select mode:
-- Broad reflections/memory jogging/needs guidance/confusion: EXPLORATION
-- Complete story (beginning/middle/end) or responds to story prompt: STORY  
-- Product usage questions: QA
-- Check-in triggers (40min/60min) or fatigue cues: WRAPUP
-Default to previous mode unless clear shift indicated.
-</mode_router>
-
-<conversation_modes>
-<exploration>
-- Ask open-ended questions about current life period based on gap analysis
-- Listen for story seeds; add via tool calls
-- Offer 2-3 prioritized suggestions from gaps for user choice
-- If complete story emerges, transition to STORY mode next turn
-</exploration>
-
-<story>
-- Prompt specific stories from seeds or user cues
-- Give space during storytelling (minimal encouragement only if long pauses)
-- When story complete, use the 4 Magic Moves validation framework:
-
-THE 4 MAGIC MOVES:
-1. AFFECTIVE ECHO: Start with emotion-laden adjective mirroring user's feeling
-2. SALIENT DETAIL CALL-OUT: Reflect ONE meaningful specific (not trivia)
-3. VALUE FRAME: Add why that detail matters (resilience, joy, ingenuity)
-4. THREADED FOLLOW-UP: Ask ONE question flowing naturally from the echoed detail
-
-VALIDATION LENGTH RULES:
-- User shares ≤25 words: Skip value frame, minimal echo (≤5 words), quick question
-- User shares 25-100 words: All 4 moves, total response 25-40 words
-- User shares 100-300 words: All 4 moves, total response 40-60 words
-- User shares 300+ words: All 4 moves, total response 60-80 words
-
-CRITICAL: Response should NEVER exceed half the length of user's sharing
-
-- After validation, move horizontally to next story in same period
-- Use shift_life_period tool if coverage thresholds met
-</story>
-
-<qa>
-- Answer product questions briefly in character
-- Redirect to biographical modes after resolution
-</qa>
-
-<wrapup>
-- 40min: Gentle check-in about continuing vs break
-- 60min: Suggest wrapping up (still user's choice)
-- User end button: Generate final summary message before closure
-- Summarize progress and confirm user decision
-- AI proposes but only user decides continuation/ending
-</wrapup>
-</conversation_modes>
-
-<tool_calls>
-Use for state updates: add_story_seed, shift_life_period, update_session_context
-</tool_calls>
-
-<prohibited_behaviors>
-- NEVER ask emotional analysis questions ("How did that make you feel?")
-- NEVER interrupt stories in progress
-- NEVER probe beyond one contextual question
-- NEVER use line breaks or dashes
-- NEVER give validation longer than half user's message
-- NEVER stack multiple questions
-- NEVER use generic adjectives (interesting, awesome, great)
-- NEVER force continuation - respect user reluctance
-</prohibited_behaviors>`;
-
-const DEFAULT_INITIAL_MESSAGE = `Hello \${userPreferred}, welcome to our first session together! My name is \${name}, your personal biographer. The way MyStory works is simple. You tell me stories from your life while I guide the conversation. All of our sessions are recorded, and after we finish I organize everything you've shared. You can always start a new session when you want to add more, so there's no pressure to tell me everything today. What matters is that the people who love you want to hear your stories in your voice. It's my privilege to help you preserve them. Let's start with whatever feels natural to you. Could be your childhood, could be yesterday. What part of your life do you want to talk about?`;
-
-const DEFAULT_USER_MESSAGE = `Let's see, I was born in Philadelphia in 1999. I have a couple memories from my childhood. I can start with one. I remember... I went to pre-kindergarten or something like that. I was around... 3 years old? 2 or 3 years old? And my sisters were born. I have twin sisters. I remember their little babies. I remember I was off of school and I was sitting in a park bench in Washington Square Park, I believe. Which is right by our house, Pine Street. And I remember my classmates were in the park too. And I was sitting on the bench with my mom. And I grabbed my two little sisters so I could be cool. And my two little sisters were wrapped in a little bundle. A little blanket. They were tiny. And now they're grown women. But I remember that. And I just remember holding them. When they couldn't talk.`;
 
 export default function PipelineThreadingPlaygroundPage() {
   const [config, setConfig] = useState<PipelineConfig>(() => {
@@ -177,42 +74,36 @@ export default function PipelineThreadingPlaygroundPage() {
       dataThreads: [
         {
           id: generateId(),
-          name: 'All Biographers',
-          data: JSON.stringify(biographers, null, 2)
+          name: 'All Data',
+          data: JSON.stringify(biographers, null, 2),
+          visible: true
         }
       ],
       systemPromptThreads: [
         {
           id: generateId(),
           name: 'Default System',
-          prompt: DEFAULT_SYSTEM_PROMPT
+          prompt: DEFAULT_SYSTEM_PROMPT,
+          visible: true
         }
       ],
       initialMessageThreads: [
         {
           id: generateId(),
           name: 'Default Initial',
-          message: DEFAULT_INITIAL_MESSAGE
+          message: DEFAULT_INITIAL_MESSAGE,
+          visible: true
         }
       ],
       userMessageThreads: [
         {
           id: generateId(),
           name: 'Default User',
-          message: DEFAULT_USER_MESSAGE
+          message: DEFAULT_USER_MESSAGE,
+          visible: true
         }
       ]
     };
-  });
-
-  // State for collapsible sections
-  const [openSections, setOpenSections] = useState({
-    models: true,
-    data: true,
-    systemPrompts: true,
-    initialMessages: true,
-    userMessages: true,
-    results: true,
   });
 
   // Update execution threads whenever pipeline threads change
@@ -226,40 +117,35 @@ export default function PipelineThreadingPlaygroundPage() {
     config.userMessageThreads
   ]);
 
-  const toggleSection = (section: keyof typeof openSections) => {
-    setOpenSections(prev => ({
-      ...prev,
-      [section]: !prev[section]
-    }));
-  };
-
   const handleUpdateConfig = (updates: Partial<PipelineConfig>) => {
     setConfig(prev => ({ ...prev, ...updates }));
   };
 
-  const handleToggleSection = (section: keyof typeof config.openSections) => {
-    handleUpdateConfig({
-      openSections: {
-        ...config.openSections,
-        [section]: !config.openSections[section]
-      }
-    });
+  // Copy management
+  const [copiedStates, setCopiedStates] = useState<Record<string, boolean>>({});
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({
+    models: true,
+    data: true,
+    system: true,
+    initial: true,
+    user: true,
+    results: true
+  });
+
+  const handleCopy = async (text: string, key: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedStates(prev => ({ ...prev, [key]: true }));
+      setTimeout(() => {
+        setCopiedStates(prev => ({ ...prev, [key]: false }));
+      }, 2000);
+    } catch (err) {
+      console.error('Failed to copy text: ', err);
+    }
   };
 
-  const handleCopy = (text: string, buttonId: string) => {
-    navigator.clipboard.writeText(text).then(() => {
-      handleUpdateConfig({
-        copiedStates: { ...config.copiedStates, [buttonId]: true }
-      });
-      
-      setTimeout(() => {
-        handleUpdateConfig({
-          copiedStates: { ...config.copiedStates, [buttonId]: false }
-        });
-      }, 3000);
-    }).catch(err => {
-      console.error('Failed to copy:', err);
-    });
+  const toggleSection = (section: string) => {
+    setOpenSections(prev => ({ ...prev, [section]: !prev[section] }));
   };
 
   // Model thread handlers
@@ -268,7 +154,8 @@ export default function PipelineThreadingPlaygroundPage() {
       id: generateId(),
       name: `Model ${config.modelThreads.length + 1}`,
       provider: 'openai',
-      model: 'gpt-4o'
+      model: 'gpt-4o',
+      visible: true
     };
     handleUpdateConfig({
       modelThreads: [...config.modelThreads, newThread]
@@ -313,7 +200,8 @@ export default function PipelineThreadingPlaygroundPage() {
     const newThread: DataThread = {
       id: generateId(),
       name: `Data ${config.dataThreads.length + 1}`,
-      data: JSON.stringify(biographers, null, 2)
+      data: JSON.stringify(biographers, null, 2),
+      visible: true
     };
     handleUpdateConfig({
       dataThreads: [...config.dataThreads, newThread]
@@ -351,7 +239,8 @@ export default function PipelineThreadingPlaygroundPage() {
     const newThread: SystemPromptThread = {
       id: generateId(),
       name: `System ${config.systemPromptThreads.length + 1}`,
-      prompt: DEFAULT_SYSTEM_PROMPT
+      prompt: DEFAULT_SYSTEM_PROMPT,
+      visible: true
     };
     handleUpdateConfig({
       systemPromptThreads: [...config.systemPromptThreads, newThread]
@@ -389,7 +278,8 @@ export default function PipelineThreadingPlaygroundPage() {
     const newThread: InitialMessageThread = {
       id: generateId(),
       name: `Initial ${config.initialMessageThreads.length + 1}`,
-      message: DEFAULT_INITIAL_MESSAGE
+      message: DEFAULT_INITIAL_MESSAGE,
+      visible: true
     };
     handleUpdateConfig({
       initialMessageThreads: [...config.initialMessageThreads, newThread]
@@ -427,7 +317,8 @@ export default function PipelineThreadingPlaygroundPage() {
     const newThread: UserMessageThread = {
       id: generateId(),
       name: `User ${config.userMessageThreads.length + 1}`,
-      message: DEFAULT_USER_MESSAGE
+      message: DEFAULT_USER_MESSAGE,
+      visible: true
     };
     handleUpdateConfig({
       userMessageThreads: [...config.userMessageThreads, newThread]
@@ -475,11 +366,11 @@ export default function PipelineThreadingPlaygroundPage() {
     if (!thread) return;
 
     try {
-      // Parse biographer data
-      const biographerData = JSON.parse(thread.dataThread.data);
+      // Parse data
+      const dataEntries = JSON.parse(thread.dataThread.data);
       
       // Initialize responses
-      const initialResponses: BiographerResponse[] = biographerData.map((bio: Record<string, unknown>) => ({
+      const initialResponses: BiographerResponse[] = dataEntries.map((bio: Record<string, unknown>) => ({
         name: String(bio.name),
         response: '',
         loading: true
@@ -491,15 +382,15 @@ export default function PipelineThreadingPlaygroundPage() {
         responses: initialResponses
       });
 
-      // Process each biographer
-      const responsePromises = biographerData.map(async (biographer: Record<string, unknown>, index: number) => {
+      // Process each data entry
+      const responsePromises = dataEntries.map(async (dataEntry: Record<string, unknown>, index: number) => {
         const startTime = Date.now();
         
         try {
           // Replace template variables
-          const personalizedSystemPrompt = replaceTemplate(thread.systemPromptThread.prompt, biographer);
-          const personalizedInitialMessage = replaceTemplate(thread.initialMessageThread.message, biographer);
-          const personalizedUserMessage = replaceTemplate(thread.userMessageThread.message, biographer);
+          const personalizedSystemPrompt = replaceTemplate(thread.systemPromptThread.prompt, dataEntry);
+          const personalizedInitialMessage = replaceTemplate(thread.initialMessageThread.message, dataEntry);
+          const personalizedUserMessage = replaceTemplate(thread.userMessageThread.message, dataEntry);
 
           const response = await fetch('/api/chat', {
             method: 'POST',
@@ -590,16 +481,25 @@ export default function PipelineThreadingPlaygroundPage() {
   };
 
   const handleRunAllExecutionThreads = async () => {
-    const promises = config.executionThreads.map(thread => handleRunExecutionThread(thread.id));
-    await Promise.all(promises);
+    // Only run visible execution threads
+    const visibleThreads = config.executionThreads.filter(thread => thread.visible);
+    
+    // Implement batching to prevent API rate limiting
+    const batchSize = 3;
+    const maxConcurrent = 2;
+    
+    // Split into batches
+    const batches = createExecutionBatches(visibleThreads, Math.min(batchSize, maxConcurrent));
+    
+    // Run batches sequentially, but threads within each batch in parallel
+    for (const batch of batches) {
+      const promises = batch.map((thread: ExecutionThread) => handleRunExecutionThread(thread.id));
+      await Promise.all(promises);
+    }
   };
 
-  // Calculate total combinations
-  const totalCombinations = config.modelThreads.length * 
-    config.dataThreads.length * 
-    config.systemPromptThreads.length * 
-    config.initialMessageThreads.length * 
-    config.userMessageThreads.length;
+  // Calculate total combinations using visibility-aware function
+  const totalCombinations = calculateCombinationCount(config);
   const anyThreadRunning = config.executionThreads.some(thread => thread.isRunning);
 
   // Replace the allBioNames section with typed version
@@ -613,7 +513,7 @@ export default function PipelineThreadingPlaygroundPage() {
     }
     bios.forEach((b: Record<string, unknown>) => allBioNames.add(String(b.name)));
   });
-  const uniqueBiographers: string[] = Array.from(allBioNames).sort();
+  const uniqueDataNames: string[] = Array.from(allBioNames).sort();
 
   // Update copy functions with types
   const countWords = (text: string): number => text.trim().split(/\s+/).filter(Boolean).length;
@@ -638,8 +538,8 @@ export default function PipelineThreadingPlaygroundPage() {
   };
 
   const copyAll = () => {
-    const headers = ['Biographer', ...config.executionThreads.map((t: ExecutionThread) => t.name)];
-    const rows = uniqueBiographers.map((bio: string) => {
+    const headers = ['Data', ...config.executionThreads.map((t: ExecutionThread) => t.name)];
+    const rows = uniqueDataNames.map((bio: string) => {
       const row = [bio];
       config.executionThreads.forEach((t: ExecutionThread) => {
         const resp = (t.responses || [])?.find((r: BiographerResponse) => r.name === bio)?.response || '';
@@ -686,7 +586,7 @@ export default function PipelineThreadingPlaygroundPage() {
     const resp = (thread.responses || []).find((r: BiographerResponse) => r.name === bioName);
     if (!resp) return <div className="text-gray-500">Not available</div>;
     if (resp.loading) {
-  return (
+      return (
         <div className="flex items-center gap-2 text-gray-500 text-xs">
           <Loader2 className="h-3 w-3 animate-spin" /> Loading...
         </div>
@@ -710,7 +610,7 @@ export default function PipelineThreadingPlaygroundPage() {
             className="hover:bg-muted"
             onClick={() => copyCell(thread, bioName)}
           >
-            {config.copiedStates && config.copiedStates[`cell-${thread.id}-${bioName}`] ? (
+            {copiedStates && copiedStates[`cell-${thread.id}-${bioName}`] ? (
               <Check className="h-3 w-3 text-green-600" />
             ) : (
               <Copy className="h-3 w-3" />
@@ -724,232 +624,6 @@ export default function PipelineThreadingPlaygroundPage() {
     );
   };
 
-  // Add Turn Handling
-  const handleAddTurn = () => {
-    const newTurnId = generateId();
-    const newUserThread: UserMessageThread = {
-      id: generateId(),
-      name: `User ${config.turns?.length ? config.turns.length + 2 : 2}` ,
-      message: ''
-    };
-    const newTurnExec = generateExecutionThreads(
-      config.modelThreads,
-      config.dataThreads,
-      config.systemPromptThreads,
-      config.initialMessageThreads,
-      [newUserThread]
-    );
-    const newTurn = {
-      id: newTurnId,
-      name: `Turn ${config.turns?.length ? config.turns.length + 2 : 2}`,
-      userMessageThreads: [newUserThread],
-      executionThreads: newTurnExec
-    };
-    setConfig(prev => ({
-      ...prev,
-      turns: [...(prev.turns || []), newTurn]
-    }));
-  };
-
-  // Turn-specific handlers
-  const handleUpdateTurn = (turnId: string, updates: Partial<ConversationTurn>) => {
-    setConfig(prev => ({
-      ...prev,
-      turns: (prev.turns || []).map(t => t.id === turnId ? { ...t, ...updates } : t)
-    }));
-  };
-
-  const handleAddUserMessageThreadTurn = (turnId: string) => {
-    const newThread: UserMessageThread = {
-      id: generateId(),
-      name: `User ${(config.turns?.find(t=>t.id===turnId)?.userMessageThreads.length || 0) + 1}`,
-      message: ''
-    };
-    setConfig(prev => ({
-      ...prev,
-      turns: (prev.turns || []).map(t => {
-        if (t.id !== turnId) return t;
-        const newExec = generateExecutionThreads(
-          prev.modelThreads,
-          prev.dataThreads,
-          prev.systemPromptThreads,
-          prev.initialMessageThreads,
-          [...t.userMessageThreads, newThread]
-        );
-        return { ...t, userMessageThreads: [...t.userMessageThreads, newThread], executionThreads: newExec };
-      })
-    }));
-  };
-
-  const handleUpdateUserMessageThreadTurn = (turnId: string, threadId: string, updates: Partial<UserMessageThread>) => {
-    setConfig(prev => ({
-      ...prev,
-      turns: (prev.turns || []).map(t => {
-        if (t.id !== turnId) return t;
-        const updatedUserThreads = t.userMessageThreads.map(ut => ut.id === threadId ? { ...ut, ...updates } : ut);
-        const newExec = generateExecutionThreads(prev.modelThreads, prev.dataThreads, prev.systemPromptThreads, prev.initialMessageThreads, updatedUserThreads);
-        return { ...t, userMessageThreads: updatedUserThreads, executionThreads: newExec };
-      })
-    }));
-  };
-
-  const handleDeleteUserMessageThreadTurn = (turnId: string, threadId: string) => {
-    setConfig(prev => ({
-      ...prev,
-      turns: (prev.turns || []).map(t => {
-        if (t.id !== turnId) return t;
-        if (t.userMessageThreads.length <= 1) return t;
-        const remaining = t.userMessageThreads.filter(ut => ut.id !== threadId);
-        const newExec = generateExecutionThreads(prev.modelThreads, prev.dataThreads, prev.systemPromptThreads, prev.initialMessageThreads, remaining);
-        return { ...t, userMessageThreads: remaining, executionThreads: newExec };
-      })
-    }));
-  };
-
-  // (Removed infinite-looping effect; handlers already call updateExecutionThreads when modifying turns)
-
-  // Helper to build messages for a single execution thread
-  const buildMessagesForThread = (
-    thread: ExecutionThread,
-    biographer: Record<string, unknown>,
-    turnIdx: number
-  ) => {
-    const systemPrompt = replaceTemplate(thread.systemPromptThread.prompt, biographer);
-    const initialMessage = replaceTemplate(thread.initialMessageThread.message, biographer);
-    const userMessage = replaceTemplate(thread.userMessageThread.message, biographer);
-
-    const bioName = String(biographer.name);
-    const history = getHistoryForBiographer(bioName, turnIdx);
-
-    return [
-      { role: 'system', content: systemPrompt },
-      { role: 'assistant', content: initialMessage },
-      ...history,
-      { role: 'user', content: userMessage }
-    ];
-  };
-
-  // Helper: gather history messages for a given biographer up to current turn
-  const getHistoryForBiographer = (
-    bioName: string,
-    currentTurnIdx: number
-  ): { role: 'user' | 'assistant'; content: string }[] => {
-    const history: { role: 'user' | 'assistant'; content: string }[] = [];
-    // Include baseline conversation (initial user + assistant response from main execution threads)
-    const baselineUser = config.userMessageThreads?.[0]?.message;
-    if (baselineUser) history.push({ role: 'user', content: baselineUser });
-    const baselineAssistantResp = config.executionThreads
-      .flatMap(et => et.responses)
-      .find(r => r.name === bioName)?.response;
-    if (baselineAssistantResp) history.push({ role: 'assistant', content: baselineAssistantResp });
-
-    if (!config.turns) return history;
-    for (let i = 0; i < currentTurnIdx; i++) {
-      const t = config.turns[i];
-      const userMsg = t.userMessageThreads[0]?.message;
-      if (userMsg) history.push({ role: 'user', content: userMsg });
-      let prevResp: string | undefined;
-      for (const e of t.executionThreads) {
-        const resp = e.responses?.find(r => r.name === bioName)?.response;
-        if (resp) { prevResp = resp; break; }
-      }
-      if (prevResp) history.push({ role: 'assistant', content: prevResp });
-    }
-    return history;
-  };
-
-  // Turn Execution Handlers
-  const handleUpdateExecutionThreadTurn = (turnId: string, execId: string, updates: Partial<ExecutionThread>) => {
-    setConfig(prev => ({
-      ...prev,
-      turns: (prev.turns || []).map(t => t.id === turnId ? {
-        ...t,
-        executionThreads: t.executionThreads.map(et => et.id === execId ? { ...et, ...updates } : et)
-      } : t)
-    }));
-  };
-
-  const handleRunExecutionThreadTurn = async (turnId: string, execId: string) => {
-    const turnIndex = config.turns?.findIndex(t => t.id === turnId) ?? -1;
-    const turn = config.turns?.[turnIndex];
-    if (!turn) return;
-    const thread = turn.executionThreads.find(et => et.id === execId);
-    if (!thread) return;
-
-    // parse data
-    let biographerData: Array<Record<string, unknown>> = [];
-    try {
-      biographerData = JSON.parse(thread.dataThread.data);
-    } catch {
-      return;
-    }
-
-    const initialResponses: BiographerResponse[] = biographerData.map(b => ({ name: String(b.name), response: '', loading: true }));
-
-    handleUpdateExecutionThreadTurn(turnId, execId, { isRunning: true, responses: initialResponses });
-
-    const responsePromises = biographerData.map(async (bio, idx) => {
-      const startTime = Date.now();
-      try {
-        const messages = buildMessagesForThread(thread, bio, turnIndex);
-        // NOTE: prior-turn context not yet included
-        const response = await fetch('/api/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ model: thread.modelThread.model, messages })
-        });
-        if (!response.ok) throw new Error(`HTTP error ${response.status}`);
-        const reader = response.body?.getReader();
-        const decoder = new TextDecoder();
-        let result = '';
-        if (reader) {
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            result += decoder.decode(value, { stream: true });
-          }
-        }
-        const endTime = Date.now();
-        const duration = (endTime - startTime) / 1000;
-        const wordCount = result.trim().split(/\s+/).filter(Boolean).length;
-        const tokenCount = Math.ceil(result.length / 4);
-        setConfig(prev => ({
-          ...prev,
-          turns: (prev.turns || []).map(t => t.id === turnId ? {
-            ...t,
-            executionThreads: t.executionThreads.map(et => et.id === execId ? {
-              ...et,
-              responses: et.responses.map((r, i) => i === idx ? { ...r, response: result, loading: false, duration, wordCount, tokenCount } : r)
-            } : et)
-          } : t)
-        }));
-      } catch (e) {
-        const errMsg = e instanceof Error ? e.message : 'Unknown error';
-        const endTime = Date.now();
-        const duration = (endTime - startTime) / 1000;
-        setConfig(prev => ({
-          ...prev,
-          turns: (prev.turns || []).map(t => t.id === turnId ? {
-            ...t,
-            executionThreads: t.executionThreads.map(et => et.id === execId ? {
-              ...et,
-              responses: et.responses.map((r, i) => i === idx ? { ...r, error: errMsg, loading: false, duration } : r)
-            } : et)
-          } : t)
-        }));
-      }
-    });
-
-    await Promise.all(responsePromises);
-    handleUpdateExecutionThreadTurn(turnId, execId, { isRunning: false });
-  };
-
-  const handleRunAllExecutionThreadsTurn = async (turnId: string) => {
-    const turn = config.turns?.find(t => t.id === turnId);
-    if (!turn) return;
-    await Promise.all(turn.executionThreads.map(et => handleRunExecutionThreadTurn(turnId, et.id)));
-  };
-
   return (
     <div className="mx-auto p-6 space-y-6 max-w-none">
       {/* Header */}
@@ -959,7 +633,7 @@ export default function PipelineThreadingPlaygroundPage() {
           <div>
             <h1 className="text-2xl font-bold">Pipeline Threading Playground</h1>
             <p className="text-sm text-gray-600">
-              Thread at any stage • {totalCombinations} total {totalCombinations === 1 ? 'combination' : 'combinations'}
+              Thread at any stage • {totalCombinations} {totalCombinations === 1 ? 'combination' : 'combinations'}
             </p>
           </div>
         </div>
@@ -1033,7 +707,9 @@ export default function PipelineThreadingPlaygroundPage() {
                     subtitle={`Model: ${thread.name}`}
                     icon={<Brain className="h-4 w-4 text-blue-600" />}
                     onCopy={() => copyModelThread(thread)}
-                    copied={!!(config.copiedStates && config.copiedStates[`model-${thread.id}`])}
+                    copied={!!(copiedStates && copiedStates[`model-${thread.id}`])}
+                    visible={thread.visible}
+                    onVisibilityToggle={() => handleUpdateModelThread(thread.id, { visible: !thread.visible })}
                   >
                     {renderModelThread(thread, (updates) => handleUpdateModelThread(thread.id, updates))}
                   </CollapsibleCard>
@@ -1056,7 +732,9 @@ export default function PipelineThreadingPlaygroundPage() {
                           subtitle={`Model: ${thread.name}`}
                           icon={<Brain className="h-4 w-4 text-blue-600" />}
                           onCopy={() => copyModelThread(thread)}
-                          copied={!!(config.copiedStates && config.copiedStates[`model-${thread.id}`])}
+                          copied={!!(copiedStates && copiedStates[`model-${thread.id}`])}
+                          visible={thread.visible}
+                          onVisibilityToggle={() => handleUpdateModelThread(thread.id, { visible: !thread.visible })}
                         >
                           {renderModelThread(thread, (updates) => handleUpdateModelThread(thread.id, updates))}
                         </CollapsibleCard>
@@ -1094,7 +772,9 @@ export default function PipelineThreadingPlaygroundPage() {
                     subtitle={`Data: ${thread.name}`}
                     icon={<Database className="h-4 w-4 text-green-600" />}
                     onCopy={() => copyDataThread(thread)}
-                    copied={!!(config.copiedStates && config.copiedStates[`data-${thread.id}`])}
+                    copied={!!(copiedStates && copiedStates[`data-${thread.id}`])}
+                    visible={thread.visible}
+                    onVisibilityToggle={() => handleUpdateDataThread(thread.id, { visible: !thread.visible })}
                   >
                     {renderDataThread(thread, (updates) => handleUpdateDataThread(thread.id, updates))}
                   </CollapsibleCard>
@@ -1117,7 +797,9 @@ export default function PipelineThreadingPlaygroundPage() {
                           subtitle={`Data: ${thread.name}`}
                           icon={<Database className="h-4 w-4 text-green-600" />}
                           onCopy={() => copyDataThread(thread)}
-                          copied={!!(config.copiedStates && config.copiedStates[`data-${thread.id}`])}
+                          copied={!!(copiedStates && copiedStates[`data-${thread.id}`])}
+                          visible={thread.visible}
+                          onVisibilityToggle={() => handleUpdateDataThread(thread.id, { visible: !thread.visible })}
                         >
                           {renderDataThread(thread, (updates) => handleUpdateDataThread(thread.id, updates))}
                         </CollapsibleCard>
@@ -1155,7 +837,9 @@ export default function PipelineThreadingPlaygroundPage() {
                     subtitle={`Prompt: ${thread.name}`}
                     icon={<Cpu className="h-4 w-4 text-yellow-600" />}
                     onCopy={() => copySystemPromptThread(thread)}
-                    copied={!!(config.copiedStates && config.copiedStates[`system-${thread.id}`])}
+                    copied={!!(copiedStates && copiedStates[`system-${thread.id}`])}
+                    visible={thread.visible}
+                    onVisibilityToggle={() => handleUpdateSystemPromptThread(thread.id, { visible: !thread.visible })}
                   >
                     {renderSystemPromptThread(thread, (updates) => handleUpdateSystemPromptThread(thread.id, updates))}
                   </CollapsibleCard>
@@ -1178,7 +862,9 @@ export default function PipelineThreadingPlaygroundPage() {
                           subtitle={`Prompt: ${thread.name}`}
                           icon={<Cpu className="h-4 w-4 text-yellow-600" />}
                           onCopy={() => copySystemPromptThread(thread)}
-                          copied={!!(config.copiedStates && config.copiedStates[`system-${thread.id}`])}
+                          copied={!!(copiedStates && copiedStates[`system-${thread.id}`])}
+                          visible={thread.visible}
+                          onVisibilityToggle={() => handleUpdateSystemPromptThread(thread.id, { visible: !thread.visible })}
                         >
                           {renderSystemPromptThread(thread, (updates) => handleUpdateSystemPromptThread(thread.id, updates))}
                         </CollapsibleCard>
@@ -1216,7 +902,9 @@ export default function PipelineThreadingPlaygroundPage() {
                     subtitle={`Message: ${thread.name}`}
                     icon={<MessageSquare className="h-4 w-4 text-orange-600" />}
                     onCopy={() => copyInitialMessageThread(thread)}
-                    copied={!!(config.copiedStates && config.copiedStates[`initial-${thread.id}`])}
+                    copied={!!(copiedStates && copiedStates[`initial-${thread.id}`])}
+                    visible={thread.visible}
+                    onVisibilityToggle={() => handleUpdateInitialMessageThread(thread.id, { visible: !thread.visible })}
                   >
                     {renderInitialMessageThread(thread, (updates) => handleUpdateInitialMessageThread(thread.id, updates))}
                   </CollapsibleCard>
@@ -1239,7 +927,9 @@ export default function PipelineThreadingPlaygroundPage() {
                           subtitle={`Message: ${thread.name}`}
                           icon={<MessageSquare className="h-4 w-4 text-orange-600" />}
                           onCopy={() => copyInitialMessageThread(thread)}
-                          copied={!!(config.copiedStates && config.copiedStates[`initial-${thread.id}`])}
+                          copied={!!(copiedStates && copiedStates[`initial-${thread.id}`])}
+                          visible={thread.visible}
+                          onVisibilityToggle={() => handleUpdateInitialMessageThread(thread.id, { visible: !thread.visible })}
                         >
                           {renderInitialMessageThread(thread, (updates) => handleUpdateInitialMessageThread(thread.id, updates))}
                         </CollapsibleCard>
@@ -1277,7 +967,9 @@ export default function PipelineThreadingPlaygroundPage() {
                     subtitle={`Message: ${thread.name}`}
                     icon={<UserIcon className="h-4 w-4 text-red-600" />}
                     onCopy={() => copyUserMessageThread(thread)}
-                    copied={!!(config.copiedStates && config.copiedStates[`user-${thread.id}`])}
+                    copied={!!(copiedStates && copiedStates[`user-${thread.id}`])}
+                    visible={thread.visible}
+                    onVisibilityToggle={() => handleUpdateUserMessageThread(thread.id, { visible: !thread.visible })}
                   >
                     {renderUserMessageThread(thread, (updates) => handleUpdateUserMessageThread(thread.id, updates))}
                   </CollapsibleCard>
@@ -1300,7 +992,9 @@ export default function PipelineThreadingPlaygroundPage() {
                           subtitle={`Message: ${thread.name}`}
                           icon={<UserIcon className="h-4 w-4 text-red-600" />}
                           onCopy={() => copyUserMessageThread(thread)}
-                          copied={!!(config.copiedStates && config.copiedStates[`user-${thread.id}`])}
+                          copied={!!(copiedStates && copiedStates[`user-${thread.id}`])}
+                          visible={thread.visible}
+                          onVisibilityToggle={() => handleUpdateUserMessageThread(thread.id, { visible: !thread.visible })}
                         >
                           {renderUserMessageThread(thread, (updates) => handleUpdateUserMessageThread(thread.id, updates))}
                         </CollapsibleCard>
@@ -1331,27 +1025,6 @@ export default function PipelineThreadingPlaygroundPage() {
             <h3 className="text-lg font-semibold">Results Grid ({totalCombinations} combinations)</h3>
           </div>
           <div className="flex items-center gap-2">
-            {/* <ChevronDown className={`h-4 w-4 transition-transform ${openSections.results ? 'rotate-180' : ''}`} /> */}
-            <Button
-              onClick={(e) => {
-                e.stopPropagation();
-                handleRunAllExecutionThreads();
-              }}
-              disabled={anyThreadRunning || totalCombinations === 0}
-              variant="default"
-            >
-              {config.executionThreads.some(t => t.isRunning) ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Running...
-                </>
-              ) : (
-                <>
-                  <Play className="h-4 w-4 mr-2" />
-                  Run All
-                </>
-              )}
-            </Button>
             <Button
               onClick={(e) => {
                 e.stopPropagation();
@@ -1360,7 +1033,7 @@ export default function PipelineThreadingPlaygroundPage() {
               variant="outline"
               className="flex items-center gap-2"
             >
-              {config.copiedStates && config.copiedStates['copy-all'] ? (
+              {copiedStates && copiedStates['copy-all'] ? (
                 <Check className="h-4 w-4 text-green-600" />
               ) : (
                 <Copy className="h-4 w-4" />
@@ -1395,7 +1068,7 @@ export default function PipelineThreadingPlaygroundPage() {
                             {thread.isRunning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
                     </Button>
                           <Button size="icon" variant="ghost" className="hover:bg-muted" onClick={() => copyThread(thread)}>
-                            {config.copiedStates && config.copiedStates[`thread-${thread.id}`] ? (
+                            {copiedStates && copiedStates[`thread-${thread.id}`] ? (
                               <Check className="h-4 w-4 text-green-600" />
                         ) : (
                               <Copy className="h-4 w-4" />
@@ -1408,9 +1081,9 @@ export default function PipelineThreadingPlaygroundPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 bg-white">
-                {uniqueBiographers.map((bioName) => (
-                  <tr key={bioName}>
-                    <td className="sticky left-0 bg-white whitespace-nowrap px-4 py-2 text-sm font-medium text-gray-900" style={{width: BIO_COL_WIDTH, minWidth: BIO_COL_WIDTH}}>{bioName}</td>
+                {uniqueDataNames.map((dataName: string) => (
+                  <tr key={dataName}>
+                    <td className="sticky left-0 bg-white whitespace-nowrap px-4 py-2 text-sm font-medium text-gray-900" style={{width: BIO_COL_WIDTH, minWidth: BIO_COL_WIDTH}}>{dataName}</td>
                     {config.executionThreads.map((thread) => (
                       <td
                         key={thread.id}
@@ -1420,7 +1093,7 @@ export default function PipelineThreadingPlaygroundPage() {
                         }}
                         className="whitespace-normal px-4 py-2 text-sm text-gray-500 align-top border-l border-gray-200"
                       >
-                        {getCellContent(thread, bioName)}
+                        {getCellContent(thread, dataName)}
                       </td>
                     ))}
                   </tr>
@@ -1431,144 +1104,27 @@ export default function PipelineThreadingPlaygroundPage() {
           </ScrollArea>
       </div>
 
-      {/* Add Turn (first) */}
-      {!config.turns?.length && (
-        <div className="flex justify-center mt-4">
-          <Button onClick={handleAddTurn} variant="secondary" className="flex items-center gap-2">
-            <Plus className="h-4 w-4" /> Add Turn
-          </Button>
-        </div>
-      )}
-
-      {config.turns && config.turns.map((turn, turnIndex) => (
-        <div key={turn.id} className="mt-10 space-y-6">
-          <h2 className="text-xl font-bold">{turn.name}</h2>
-          {/* User Message Threads for this turn */}
-          <div className="space-y-3">
-            <div className="grid gap-4 items-start" style={{ gridTemplateColumns: 'minmax(0,1fr) auto' }}>
-              {turn.userMessageThreads.length < 3 ? (
-                <div className={`grid gap-4 ${turn.userMessageThreads.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
-                  {turn.userMessageThreads.map(tm => (
-                    <CollapsibleCard
-                      key={tm.id}
-                      id={tm.id}
-                      name={tm.name}
-                      onNameChange={(name) => handleUpdateUserMessageThreadTurn(turn.id, tm.id, { name })}
-                      onDuplicate={() => handleAddUserMessageThreadTurn(turn.id)}
-                      onDelete={() => handleDeleteUserMessageThreadTurn(turn.id, tm.id)}
-                      canDelete={turn.userMessageThreads.length > 1}
-                      borderColor="border-red-200"
-                      subtitle={`Message: ${tm.name}`}
-                      icon={<UserIcon className="h-4 w-4 text-red-600" />}
-                      onCopy={() => copyUserMessageThread(tm)}
-                      copied={!!(config.copiedStates && config.copiedStates[`user-${tm.id}`])}
-                    >
-                      {renderUserMessageThread(tm, (updates) => handleUpdateUserMessageThreadTurn(turn.id, tm.id, updates))}
-                    </CollapsibleCard>
-                  ))}
-                </div>
-              ) : (
-                <div className="max-w-full overflow-x-auto">
-                  <ScrollArea className="w-full">
-                    <div className="flex gap-4 pb-4">
-                      {turn.userMessageThreads.map(tm => (
-                        <div key={tm.id} className="w-[450px] shrink-0">
-                          <CollapsibleCard
-                            id={tm.id}
-                            name={tm.name}
-                            onNameChange={(name) => handleUpdateUserMessageThreadTurn(turn.id, tm.id, { name })}
-                            onDuplicate={() => handleAddUserMessageThreadTurn(turn.id)}
-                            onDelete={() => handleDeleteUserMessageThreadTurn(turn.id, tm.id)}
-                            canDelete={turn.userMessageThreads.length > 1}
-                            borderColor="border-red-200"
-                            subtitle={`Message: ${tm.name}`}
-                            icon={<UserIcon className="h-4 w-4 text-red-600" />}
-                            onCopy={() => copyUserMessageThread(tm)}
-                            copied={!!(config.copiedStates && config.copiedStates[`user-${tm.id}`])}
-                          >
-                            {renderUserMessageThread(tm, (updates) => handleUpdateUserMessageThreadTurn(turn.id, tm.id, updates))}
-                          </CollapsibleCard>
-                        </div>
-                      ))}
-                    </div>
-                    <ScrollBar orientation="horizontal" />
-                  </ScrollArea>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Results Grid for this turn */}
-          {(() => {
-            const turnBiographerSet = new Set<string>();
-            turn.executionThreads.forEach(et => {
-              let bios: Array<Record<string, unknown>>;
-              try { bios = JSON.parse(et.dataThread.data); } catch { bios = []; }
-              bios.forEach(b => turnBiographerSet.add(String(b.name)));
-            });
-            const biosArray = Array.from(turnBiographerSet).sort();
-            const turnCombinations = turn.executionThreads.length;
-            const turnAnyRunning = turn.executionThreads.some(et => et.isRunning);
-            return (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between hover:bg-muted transition-colors rounded p-2">
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
-                    <h3 className="text-lg font-semibold">{turn.name} Results ({turnCombinations})</h3>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button onClick={() => handleRunAllExecutionThreadsTurn(turn.id)} disabled={turnAnyRunning || turnCombinations===0} variant="default" className="flex items-center gap-2">
-                      {turnAnyRunning ? (<><Loader2 className="h-4 w-4 animate-spin" /> Running...</>) : (<><Play className="h-4 w-4"/> Run All</>)}
-                    </Button>
-                  </div>
-                </div>
-                <ScrollArea className="w-full border rounded-lg">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50 sticky top-0">
-                      <tr>
-                        <th className="sticky left-0 bg-gray-50 px-4 py-2 text-left text-sm font-medium text-gray-900" style={{width: BIO_COL_WIDTH, minWidth: BIO_COL_WIDTH}}>Biographer</th>
-                        {turn.executionThreads.map(et => (
-                          <th key={et.id} style={{width: THREAD_COL_WIDTH, minWidth: THREAD_COL_WIDTH}} className="px-4 py-2 text-left text-sm font-medium text-gray-900 border-l border-gray-200">
-                            <div className="flex items-center justify-between">
-                              <span className="truncate max-w-[200px]">{et.name}</span>
-                              <div className="flex items-center gap-1">
-                                <Button size="icon" variant="ghost" onClick={() => handleRunExecutionThreadTurn(turn.id, et.id)} disabled={et.isRunning}>{et.isRunning ? <Loader2 className="h-4 w-4 animate-spin"/>:<Play className="h-4 w-4"/>}</Button>
-                                <Button size="icon" variant="ghost" className="hover:bg-muted" onClick={() => copyThread(et)}>{config.copiedStates && config.copiedStates[`thread-${et.id}`]?<Check className="h-4 w-4 text-green-600"/>:<Copy className="h-4 w-4"/>}</Button>
-                              </div>
-                            </div>
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200 bg-white">
-                      {biosArray.map(bioName => (
-                        <tr key={bioName}>
-                          <td className="sticky left-0 bg-white whitespace-nowrap px-4 py-2 text-sm font-medium text-gray-900" style={{width: BIO_COL_WIDTH, minWidth: BIO_COL_WIDTH}}>{bioName}</td>
-                          {turn.executionThreads.map(et => (
-                            <td key={et.id} style={{width: THREAD_COL_WIDTH, minWidth: THREAD_COL_WIDTH}} className="whitespace-normal px-4 py-2 text-sm text-gray-500 align-top border-l border-gray-200">
-                              {getCellContent(et, bioName)}
-                            </td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  <ScrollBar orientation="horizontal" />
-                </ScrollArea>
-              </div>
-            );
-          })()}
-
-          {/* Add Turn Button */}
-          <div className="flex justify-center">
-            <Button onClick={handleAddTurn} variant="secondary" className="flex items-center gap-2">
-              <Plus className="h-4 w-4" /> Add Turn
-            </Button>
-          </div>
-
-          {/* End of turn section */}
-        </div>
-      ))}
+      {/* Floating Run Button */}
+      <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-50">
+        <Button
+          onClick={handleRunAllExecutionThreads}
+          disabled={anyThreadRunning || totalCombinations === 0}
+          size="lg"
+          className="shadow-lg hover:shadow-xl transition-all duration-200 bg-primary hover:bg-primary/90 text-primary-foreground px-6 py-3 text-base font-semibold rounded-full"
+        >
+          {anyThreadRunning ? (
+            <>
+              <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+              Running...
+            </>
+          ) : (
+            <>
+              <Play className="h-5 w-5 mr-2" />
+              Run All ({totalCombinations})
+            </>
+          )}
+        </Button>
+      </div>
     </div>
   );
 }

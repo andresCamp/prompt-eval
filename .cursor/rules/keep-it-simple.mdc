@@ -1,0 +1,153 @@
+---
+description: This rule provides guidelines for avoiding overengineering and maintaining code simplicity when generating code and problem solving in all applications
+globs: *.tsx
+alwaysApply: true
+---
+ # Keep It Simple: Avoid Overengineering
+
+## Core Principles
+
+1. **Use Existing Functionality First**: Before implementing custom solutions, check if the framework, library, or existing components already provide the functionality you need.
+
+2. **Minimize State Management**: Only add state variables when absolutely necessary. Each piece of state increases complexity and potential for bugs.
+
+3. **Trust Component Libraries**: When using UI component libraries (like shadcn/ui), trust their built-in behaviors for animations, transitions, and accessibility.
+
+4. **Avoid Premature Optimization**: Don't optimize code until there's a measurable performance issue. Premature optimization often leads to unnecessary complexity.
+
+5. **One Responsibility Per Function**: Keep functions focused on a single responsibility. If a function is doing too much, split it into smaller functions.
+
+6. **Do NOT Modify Base/Primitive Components**: If modifications are needed ask for permission. In general do not modify files in the /components/ui directoty unless permission is granted. Primitive components will be marked as base or primitive in the tsdoc, always ask for permission before modifying.
+
+
+
+## Common Anti-Patterns to Avoid
+
+### 1. Manual Animation Management
+
+**Don't:**
+```tsx
+// Don't manually manage animation states with timeouts
+const [isClosing, setIsClosing] = useState(false);
+
+const handleClose = () => {
+  setIsClosing(true);
+  setTimeout(() => {
+    onClose();
+    setIsClosing(false);
+  }, 300);
+};
+
+return <Dialog open={!isClosing}>...</Dialog>;
+```
+
+**Do:**
+```tsx
+// Let the component handle its own animations
+const handleOpenChange = (open: boolean) => {
+  if (!open) onClose();
+};
+
+return <Dialog open onOpenChange={handleOpenChange}>...</Dialog>;
+```
+
+### 2. Excessive State Variables
+
+**Don't:**
+```tsx
+// Don't create state for values that can be derived
+const [isValid, setIsValid] = useState(false);
+const [isInvalid, setIsInvalid] = useState(true);
+const [isEmpty, setIsEmpty] = useState(true);
+
+useEffect(() => {
+  setIsValid(value.length > 0);
+  setIsInvalid(value.length === 0);
+  setIsEmpty(value.length === 0);
+}, [value]);
+```
+
+**Do:**
+```tsx
+// Derive values from a single source of truth
+const [value, setValue] = useState('');
+const isValid = value.length > 0;
+const isEmpty = value.length === 0;
+```
+
+### 3. Reinventing Built-in Behavior
+
+**Don't:**
+```tsx
+// Don't reimplement behavior that already exists
+const handleSubmit = (e) => {
+  e.preventDefault();
+  const formData = new FormData(e.target);
+  const data = {};
+  for (const [key, value] of formData.entries()) {
+    data[key] = value;
+  }
+  // Process data...
+};
+```
+
+**Do:**
+```tsx
+// Use existing APIs and hooks
+const { register, handleSubmit } = useForm();
+const onSubmit = (data) => {
+  // Process data...
+};
+```
+
+### 4. Complex Conditional Rendering
+
+**Don't:**
+```tsx
+// Don't create complex nested conditions
+{isLoading ? (
+  <LoadingSpinner />
+) : error ? (
+  <ErrorMessage error={error} />
+) : data ? (
+  data.items.length > 0 ? (
+    <ItemList items={data.items} />
+  ) : (
+    <EmptyState />
+  )
+) : (
+  <InitialState />
+)}
+```
+
+**Do:**
+```tsx
+// Extract into readable functions or components
+const renderContent = () => {
+  if (isLoading) return <LoadingSpinner />;
+  if (error) return <ErrorMessage error={error} />;
+  if (!data) return <InitialState />;
+  return data.items.length > 0 ? <ItemList items={data.items} /> : <EmptyState />;
+};
+
+return <div>{renderContent()}</div>;
+```
+
+## When to Add Complexity
+
+Complexity is justified when:
+
+1. The default behavior is demonstrably insufficient for the specific use case
+2. There's a clear performance benefit that's been measured, not assumed
+3. The added complexity solves a real user problem
+4. The solution has been documented for future developers
+
+## Questions to Ask Before Adding Complexity
+
+1. "Does the framework/library already provide this functionality?"
+2. "Can I achieve this with fewer state variables?"
+3. "Will this solution be obvious to other developers?"
+4. "Is there a simpler way to solve this problem?"
+5. "Am I solving a real problem or an imagined one?"
+
+Remember: The best code is often the code you don't write. Simplicity leads to maintainability, fewer bugs, and better developer experience.

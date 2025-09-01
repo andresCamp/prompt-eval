@@ -77,6 +77,7 @@ export interface MetricsProps {
   duration?: number;
   tokenCount?: number;
   wordCount?: number;
+  cost?: number;
 }
 
 export interface BiographerResponse {
@@ -87,6 +88,9 @@ export interface BiographerResponse {
   duration?: number;
   wordCount?: number;
   tokenCount?: number;
+  cost?: number; // Cost in USD
+  promptTokens?: number;
+  completionTokens?: number;
 }
 
 // Legacy types for backward compatibility
@@ -144,30 +148,35 @@ export interface ModelThread {
   name: string;
   provider: string;
   model: string;
+  visible: boolean; // New visibility property
 }
 
 export interface DataThread {
   id: string;
   name: string;
   data: string;
+  visible: boolean; // New visibility property
 }
 
 export interface SystemPromptThread {
   id: string;
   name: string;
   prompt: string;
+  visible: boolean; // New visibility property
 }
 
 export interface InitialMessageThread {
   id: string;
   name: string;
   message: string;
+  visible: boolean; // New visibility property
 }
 
 export interface UserMessageThread {
   id: string;
   name: string;
   message: string;
+  visible: boolean; // New visibility property
 }
 
 export interface ExecutionThread {
@@ -181,6 +190,7 @@ export interface ExecutionThread {
   responses: BiographerResponse[];
   isRunning: boolean;
   copiedStates: Record<string, boolean>;
+  visible: boolean; // New visibility property for execution threads
 }
 
 export interface PipelineConfig {
@@ -200,7 +210,20 @@ export interface PipelineConfig {
     userMessages: boolean;
     results: boolean;
   };
+  // New visibility state for sections
+  visibility: {
+    models: boolean;
+    data: boolean;
+    systemPrompts: boolean;
+    initialMessages: boolean;
+    userMessages: boolean;
+  };
   copiedStates: Record<string, boolean>;
+  // Batching configuration for large combo sets
+  batchConfig: {
+    maxConcurrent: number; // Maximum concurrent API calls
+    batchSize: number; // Size of each batch
+  };
 }
 
 export interface ConversationTurn {
