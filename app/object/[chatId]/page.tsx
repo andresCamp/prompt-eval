@@ -23,7 +23,7 @@ import { Loader2, Play, GitBranch } from 'lucide-react';
 import { getGenerateObjectThreadKey, buildSnapshotFromThread } from '@/lib/atoms';
 import { 
   configAtom
-} from '@/lib/atoms/generate-object-working';
+} from '@/lib/atoms/generate-object-chat';
 import {
   GenerateObjectModelThread,
   SchemaThread,
@@ -63,6 +63,11 @@ const DEFAULT_PROMPT = `{
 }`;
 
 export default function GenerateObjectPlaygroundPage() {
+  // Set per-page namespace for storage keys (scoped to object/[chatId])
+  if (typeof window !== 'undefined') {
+    (window as unknown as { __PAGE_NS__?: string }).__PAGE_NS__ = '@object-chat';
+  }
+  
   const [mounted, setMounted] = useState(false);
   
   // Separate working config from persistence
