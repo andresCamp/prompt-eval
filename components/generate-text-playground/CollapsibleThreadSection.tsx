@@ -1,5 +1,5 @@
 /**
- * @fileoverview Collapsible thread sections for GenerateObject
+ * @fileoverview Collapsible thread sections for GenerateText
  * Maintains state when collapsed but allows collapsing for space management
  */
 
@@ -10,23 +10,23 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Copy, Trash2, Brain, Code, Cpu, FileJson, Eye, EyeOff, ChevronDown } from 'lucide-react';
+import { Plus, Copy, Trash2, Brain, Cpu, MessageSquare, Eye, EyeOff, ChevronDown } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
-  GenerateObjectModelThread,
-  SchemaThread,
+  GenerateTextModelThread,
   SystemPromptThread,
   PromptDataThread,
 } from './types';
 import { PROVIDERS } from '@/lib/llm-providers';
 
-// Get all models that support object generation
-const getObjectGenerationModels = () => {
+// Get all models that support text generation (assume all language models do)
+const getTextGenerationModels = () => {
   const models: { provider: string; model: string; displayName: string }[] = [];
   
   PROVIDERS.providers.forEach(provider => {
     provider.models.forEach(model => {
-      if (model.capabilities.objectGeneration) {
+      // Text generation is supported by all language models (those with objectGeneration or invoke: "language")
+      if (model.capabilities.objectGeneration || model.invoke === "language") {
         models.push({
           provider: provider.name,
           model: model.id,
@@ -39,8 +39,8 @@ const getObjectGenerationModels = () => {
   return models;
 };
 
-const OBJECT_GENERATION_MODELS = getObjectGenerationModels();
-const PROVIDER_OPTIONS = [...new Set(OBJECT_GENERATION_MODELS.map(m => m.provider))];
+const TEXT_GENERATION_MODELS = getTextGenerationModels();
+const PROVIDER_OPTIONS = [...new Set(TEXT_GENERATION_MODELS.map(m => m.provider))];
 
 interface BaseThreadSectionProps<T> {
   title: string;
@@ -58,12 +58,6 @@ interface BaseThreadSectionProps<T> {
 }
 
 type BaseThread = { id: string; name: string; visible: boolean };
-
-type UnionThread =
-  | import('./types').GenerateObjectModelThread
-  | import('./types').SchemaThread
-  | import('./types').SystemPromptThread
-  | import('./types').PromptDataThread;
 
 function CollapsibleThreadSection<T extends BaseThread>({
   title,
@@ -179,9 +173,8 @@ function CollapsibleThreadSection<T extends BaseThread>({
   );
 }
 
-
 // Model Thread Section with Provider Selection
-export function ModelThreadSection({
+export function TextModelThreadSection({
   threads,
   onAddThread,
   onUpdateThread,
@@ -190,9 +183,9 @@ export function ModelThreadSection({
   copiedStates,
   onCopy,
 }: {
-  threads: GenerateObjectModelThread[];
+  threads: GenerateTextModelThread[];
   onAddThread: () => void;
-  onUpdateThread: (id: string, updates: Partial<GenerateObjectModelThread>) => void;
+  onUpdateThread: (id: string, updates: Partial<GenerateTextModelThread>) => void;
   onDeleteThread: (id: string) => void;
   onDuplicateThread: (id: string) => void;
   copiedStates: Record<string, boolean>;
@@ -211,7 +204,7 @@ export function ModelThreadSection({
       copiedStates={copiedStates}
       onCopy={onCopy}
       renderContent={(thread, onUpdate) => {
-        const providerModels = OBJECT_GENERATION_MODELS.filter(m => m.provider === thread.provider);
+        const providerModels = TEXT_GENERATION_MODELS.filter(m => m.provider === thread.provider);
         
         return (
           <div className="space-y-3">
@@ -220,7 +213,7 @@ export function ModelThreadSection({
               <Select
                 value={thread.provider}
                 onValueChange={(value) => {
-                  const firstModel = OBJECT_GENERATION_MODELS.find(m => m.provider === value);
+                  const firstModel = TEXT_GENERATION_MODELS.find(m => m.provider === value);
                   onUpdate({ 
                     provider: value, 
                     model: firstModel?.model || '',
@@ -265,60 +258,8 @@ export function ModelThreadSection({
   );
 }
 
-// Schema Thread Section  
-export function SchemaThreadSection({
-  threads,
-  onAddThread,
-  onUpdateThread,
-  onDeleteThread,
-  onDuplicateThread,
-  copiedStates,
-  onCopy,
-}: {
-  threads: SchemaThread[];
-  onAddThread: () => void;
-  onUpdateThread: (id: string, updates: Partial<SchemaThread>) => void;
-  onDeleteThread: (id: string) => void;
-  onDuplicateThread: (id: string) => void;
-  copiedStates: Record<string, boolean>;
-  onCopy: (text: string, key: string) => void;
-}) {
-  return (
-    <CollapsibleThreadSection
-      title="Schemas"
-      threads={threads}
-      icon={<Code className="h-5 w-5 text-green-600" />}
-      borderColor="border-green-200"
-      onAddThread={onAddThread}
-      onUpdateThread={onUpdateThread}
-      onDeleteThread={onDeleteThread}
-      onDuplicateThread={onDuplicateThread}
-      copiedStates={copiedStates}
-      onCopy={onCopy}
-      renderContent={(thread, onUpdate) => (
-        <div className="space-y-3">
-          <Textarea
-            value={thread.schema}
-            onChange={(e) => onUpdate({ schema: e.target.value })}
-            placeholder="Enter Zod schema..."
-            className="font-mono text-xs h-40"
-            onClick={(e) => e.stopPropagation()}
-          />
-          <Input
-            value={thread.schemaDescription || ''}
-            onChange={(e) => onUpdate({ schemaDescription: e.target.value })}
-            placeholder="Schema description (optional)"
-            className="text-sm"
-            onClick={(e) => e.stopPropagation()}
-          />
-        </div>
-      )}
-    />
-  );
-}
-
 // System Prompt Thread Section
-export function SystemPromptThreadSection({
+export function TextSystemPromptThreadSection({
   threads,
   onAddThread,
   onUpdateThread,
@@ -361,7 +302,7 @@ export function SystemPromptThreadSection({
 }
 
 // Prompt Data Thread Section
-export function PromptDataThreadSection({
+export function TextPromptDataThreadSection({
   threads,
   onAddThread,
   onUpdateThread,
@@ -380,9 +321,9 @@ export function PromptDataThreadSection({
 }) {
   return (
     <CollapsibleThreadSection
-      title="Prompt Data"
+      title="User Prompts"
       threads={threads}
-      icon={<FileJson className="h-5 w-5 text-orange-600" />}
+      icon={<MessageSquare className="h-5 w-5 text-orange-600" />}
       borderColor="border-orange-200"
       onAddThread={onAddThread}
       onUpdateThread={onUpdateThread}
@@ -394,8 +335,8 @@ export function PromptDataThreadSection({
         <Textarea
           value={thread.prompt}
           onChange={(e) => onUpdate({ prompt: e.target.value })}
-          placeholder="Enter prompt or JSON data..."
-          className="font-mono text-xs h-40"
+          placeholder="Enter user prompt..."
+          className="text-sm h-32"
           onClick={(e) => e.stopPropagation()}
         />
       )}

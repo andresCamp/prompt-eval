@@ -113,9 +113,12 @@ export function replaceTemplate(template: string, biographer: Record<string, unk
 
 /**
  * Generate a unique ID for threads
+ * Uses a counter to ensure uniqueness even when called rapidly
  */
+let idCounter = 0;
 export function generateId(): string {
-  return `thread-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  idCounter += 1;
+  return `thread-${Date.now()}-${idCounter}-${Math.random().toString(36).substr(2, 9)}`;
 }
 
 /**
