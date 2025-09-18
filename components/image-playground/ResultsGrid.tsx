@@ -3,7 +3,7 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Play, Download, Lock, Unlock } from 'lucide-react';
+import { Loader2, Play, Download, Lock, Unlock, X } from 'lucide-react';
 import type { ImageExecutionThread } from './types';
 import Image from 'next/image';
 import { IMAGE_PROVIDERS } from './types';
@@ -19,7 +19,7 @@ interface ImageGridProps {
   onToggleCache: (threadId: string, shouldCache: boolean, image?: string) => void;
 }
 
-function ImagePreview({ image }: { image?: string }) {
+function ImagePreview({ image, onClick }: { image?: string; onClick?: () => void }) {
   if (!image) {
     return (
       <div className="flex h-60 w-full items-center justify-center rounded-md border border-dashed text-sm text-muted-foreground">
@@ -29,8 +29,21 @@ function ImagePreview({ image }: { image?: string }) {
   }
 
   return (
-    <div className="relative h-60 w-full overflow-hidden rounded-md">
-      <Image src={image} alt="Generated" fill sizes="(max-width: 768px) 100vw, 320px" className="object-cover" unoptimized />
+    <div
+      className="relative w-full overflow-hidden rounded-md bg-gray-50 dark:bg-gray-900 cursor-pointer"
+      onClick={onClick}
+    >
+      <div className="relative w-full" style={{ maxHeight: '500px' }}>
+        <Image
+          src={image}
+          alt="Generated"
+          width={512}
+          height={512}
+          sizes="(max-width: 768px) 100vw, 512px"
+          className="w-full h-auto object-contain"
+          unoptimized
+        />
+      </div>
     </div>
   );
 }
@@ -39,6 +52,7 @@ export function ResultsGrid({ threads, onRunThread, onDownload, onRunAll, anyRun
   const visibleThreads = useMemo(() => threads.filter(thread => thread.visible), [threads]);
   const [displayImages, setDisplayImages] = useState<Record<string, string>>({});
   const [lockedState, setLockedState] = useState<Record<string, boolean>>({});
+  const [previewImage, setPreviewImage] = useState<{ image: string; title: string } | null>(null);
 
   useEffect(() => {
     setDisplayImages(prev => {
@@ -155,7 +169,13 @@ export function ResultsGrid({ threads, onRunThread, onDownload, onRunAll, anyRun
                 </div>
               </CardHeader>
               <CardContent className="flex-1 space-y-3">
-                <ImagePreview image={effectiveImage}
+                <ImagePreview
+                  image={effectiveImage}
+                  onClick={() => {
+                    if (effectiveImage) {
+                      setPreviewImage({ image: effectiveImage, title: thread.name });
+                    }
+                  }}
                 />
                 {result && (
                   <div className="text-xs text-muted-foreground space-y-1">
@@ -190,6 +210,35 @@ export function ResultsGrid({ threads, onRunThread, onDownload, onRunAll, anyRun
           );
         })}
       </div>
+
+      {/* Minimalist Full Screen Image Preview */}
+      {previewImage && (
+        <div
+          className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center"
+          onClick={() => setPreviewImage(null)}
+        >
+          {/* Close button */}
+          <button
+            className="absolute top-4 right-4 text-white/70 hover:text-white transition-colors"
+            onClick={(e) => {
+              e.stopPropagation();
+              setPreviewImage(null);
+            }}
+          >
+            <X className="h-6 w-6" />
+          </button>
+
+          {/* Full Screen Image */}
+          <Image
+            src={previewImage.image}
+            alt={previewImage.title}
+            width={2048}
+            height={2048}
+            className="max-w-full max-h-full w-auto h-auto object-contain"
+            unoptimized
+          />
+        </div>
+      )}
     </div>
   );
 }
