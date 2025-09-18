@@ -1,15 +1,14 @@
 /**
- * @fileoverview GenerateObject Playground
+ * @fileoverview GenerateText Playground
  * 
- * This page provides a comprehensive testing system for structured object generation.
- * Each stage of the pipeline (Model � Schema � System � Prompt � Output) can
+ * This page provides a comprehensive testing system for text generation.
+ * Each stage of the pipeline (Model → System → Prompt → Output) can
  * have multiple threads, and all combinations are executed as separate threads.
  * 
  * Architecture:
  * - Model threads: Different AI models/providers
- * - Schema threads: Different Zod schemas for output structure
  * - System prompt threads: Different system instructions
- * - Prompt data threads: Different input prompts/JSON data
+ * - Prompt data threads: Different input prompts
  * - Execution threads: All combinations of the above
  */
 
@@ -20,49 +19,33 @@ import { useAtom } from 'jotai';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Loader2, Play, GitBranch } from 'lucide-react';
-import { getGenerateObjectThreadKey, buildSnapshotFromThread } from '@/lib/atoms';
+import { getGenerateTextThreadKey, buildSnapshotFromThread } from '@/lib/atoms';
 import { 
   configAtomFamily
-} from '@/lib/atoms/generate-object-chat';
+} from '@/lib/atoms/generate-text-chat';
 import {
-  GenerateObjectModelThread,
-  SchemaThread,
+  GenerateTextModelThread,
   SystemPromptThread,
   PromptDataThread,
-  GenerateObjectExecutionThread,
-  GenerateObjectConfig,
-  GenerateObjectResult,
-} from '@/components/generate-object-playground/types';
+  GenerateTextExecutionThread,
+  GenerateTextConfig,
+  GenerateTextResult,
+} from '@/components/generate-text-playground/types';
 import {
-  ModelThreadSection,
-  SchemaThreadSection,
-  SystemPromptThreadSection,
-  PromptDataThreadSection,
-} from '@/components/generate-object-playground/CollapsibleThreadSection';
-import { ResultsGrid } from '@/components/generate-object-playground/ResultsGrid';
+  TextModelThreadSection,
+  TextSystemPromptThreadSection,
+  TextPromptDataThreadSection,
+} from '@/components/generate-text-playground/CollapsibleThreadSection';
+import { TextResultsGrid } from '@/components/generate-text-playground/ResultsGrid';
 import { generateId } from '@/components/prompt-playground/shared/utils';
 // Module hydration uses localStorage directly (no hooks needed here)
 
 // Default values
-const DEFAULT_SCHEMA = `z.object({
-  name: z.string(),
-  description: z.string(),
-  category: z.string(),
-  price: z.number(),
-  inStock: z.boolean()
-})`;
+const DEFAULT_SYSTEM_PROMPT = `You are a helpful and creative writing assistant. Generate clear, engaging, and relevant text based on the user's prompt.`;
 
-const DEFAULT_SYSTEM_PROMPT = `You are a data transformation assistant. Transform the input data into the specified schema format. Ensure all required fields are populated with appropriate values based on the input.`;
+const DEFAULT_PROMPT = `Write a short story about a robot who discovers they can dream.`;
 
-const DEFAULT_PROMPT = `{
-  "title": "Wireless Bluetooth Headphones",
-  "details": "High-quality wireless headphones with noise cancellation",
-  "type": "Electronics",
-  "cost": 99.99,
-  "available": true
-}`;
-
-export default function GenerateObjectPlaygroundPage({ 
+export default function GenerateTextPlaygroundPage({ 
   params 
 }: { 
   params: Promise<{ chatId: string }> 
@@ -70,9 +53,9 @@ export default function GenerateObjectPlaygroundPage({
   // Unwrap the params Promise
   const { chatId } = use(params);
   
-  // Set per-page namespace for storage keys (scoped to object/[chatId])
+  // Set per-page namespace for storage keys (scoped to text/[chatId])
   if (typeof window !== 'undefined') {
-    (window as unknown as { __PAGE_NS__?: string }).__PAGE_NS__ = `@object-chat-${chatId}`;
+    (window as unknown as { __PAGE_NS__?: string }).__PAGE_NS__ = `@text-chat-${chatId}`;
   }
   
   const [mounted, setMounted] = useState(false);
@@ -102,15 +85,6 @@ export default function GenerateObjectPlaygroundPage({
               visible: true
             }
           ],
-          schemaThreads: [
-            {
-              id: generateId(),
-              name: 'Product Schema',
-              schema: DEFAULT_SCHEMA,
-              schemaDescription: 'Schema for product information',
-              visible: true
-            }
-          ],
           systemPromptThreads: [
             {
               id: generateId(),
@@ -122,14 +96,13 @@ export default function GenerateObjectPlaygroundPage({
           promptDataThreads: [
             {
               id: generateId(),
-              name: 'Sample Product',
+              name: 'Robot Dreams Story',
               prompt: DEFAULT_PROMPT,
               visible: true
             }
           ],
           executionThreads: [],
-          temperature: 0.7,
-          outputMode: 'object'
+          temperature: 0.7
         });
       }
   }, [mounted, config.modelThreads.length, setConfig]);
@@ -265,24 +238,21 @@ export default function GenerateObjectPlaygroundPage({
   // Update execution threads whenever pipeline threads change
   useEffect(() => {
     setConfig(prev => {
-      const newExecutionThreads: GenerateObjectExecutionThread[] = [];
+      const newExecutionThreads: GenerateTextExecutionThread[] = [];
       prev?.modelThreads?.filter(t => t.visible).forEach(modelThread => {
-        prev?.schemaThreads?.filter(t => t.visible).forEach(schemaThread => {
-          prev?.systemPromptThreads?.filter(t => t.visible).forEach(systemThread => {
-            prev?.promptDataThreads?.filter(t => t.visible).forEach(promptThread => {
-              const name = `${modelThread.name} × ${schemaThread.name} × ${systemThread.name} × ${promptThread.name}`;
-              const existingThread = prev?.executionThreads?.find(t => t.name === name);
-              newExecutionThreads.push({
-                id: existingThread?.id || generateId(),
-                name,
-                modelThread,
-                schemaThread,
-                systemPromptThread: systemThread,
-                promptDataThread: promptThread,
-                visible: true,
-                isRunning: existingThread?.isRunning || false,
-                result: existingThread?.result
-              });
+        prev?.systemPromptThreads?.filter(t => t.visible).forEach(systemThread => {
+          prev?.promptDataThreads?.filter(t => t.visible).forEach(promptThread => {
+            const name = `${modelThread.name} × ${systemThread.name} × ${promptThread.name}`;
+            const existingThread = prev?.executionThreads?.find(t => t.name === name);
+            newExecutionThreads.push({
+              id: existingThread?.id || generateId(),
+              name,
+              modelThread,
+              systemPromptThread: systemThread,
+              promptDataThread: promptThread,
+              visible: true,
+              isRunning: existingThread?.isRunning || false,
+              result: existingThread?.result
             });
           });
         });
@@ -291,12 +261,11 @@ export default function GenerateObjectPlaygroundPage({
     });
   }, [
     config?.modelThreads,
-    config?.schemaThreads,
     config?.systemPromptThreads,
     config?.promptDataThreads
   ]);
 
-  const handleUpdateConfig = (updates: Partial<GenerateObjectConfig>) => {
+  const handleUpdateConfig = (updates: Partial<GenerateTextConfig>) => {
     setConfig(prev => prev ? ({ ...prev, ...updates }) : prev);
   };
 
@@ -317,7 +286,7 @@ export default function GenerateObjectPlaygroundPage({
 
   // Model thread handlers
   const handleAddModelThread = () => {
-    const newThread: GenerateObjectModelThread = {
+    const newThread: GenerateTextModelThread = {
       id: generateId(),
       name: `Model ${config.modelThreads.length + 1}`,
       provider: 'openai',
@@ -329,7 +298,7 @@ export default function GenerateObjectPlaygroundPage({
     });
   };
 
-  const handleUpdateModelThread = (id: string, updates: Partial<GenerateObjectModelThread>) => {
+  const handleUpdateModelThread = (id: string, updates: Partial<GenerateTextModelThread>) => {
     handleUpdateConfig({
       modelThreads: config.modelThreads.map(thread => 
         thread.id === id ? { ...thread, ...updates } : thread
@@ -355,44 +324,6 @@ export default function GenerateObjectPlaygroundPage({
     }
   };
 
-  // Schema thread handlers
-  const handleAddSchemaThread = () => {
-    const newThread: SchemaThread = {
-      id: generateId(),
-      name: `Schema ${config.schemaThreads.length + 1}`,
-      schema: DEFAULT_SCHEMA,
-      visible: true
-    };
-    handleUpdateConfig({
-      schemaThreads: [...config.schemaThreads, newThread]
-    });
-  };
-
-  const handleUpdateSchemaThread = (id: string, updates: Partial<SchemaThread>) => {
-    handleUpdateConfig({
-      schemaThreads: config.schemaThreads.map(thread => 
-        thread.id === id ? { ...thread, ...updates } : thread
-      )
-    });
-  };
-
-  const handleDeleteSchemaThread = (id: string) => {
-    if (config.schemaThreads.length > 1) {
-      handleUpdateConfig({
-        schemaThreads: config.schemaThreads.filter(thread => thread.id !== id)
-      });
-    }
-  };
-
-  const handleDuplicateSchemaThread = (id: string) => {
-    const thread = config.schemaThreads.find(t => t.id === id);
-    if (thread) {
-      const newThread = { ...thread, id: generateId(), name: `${thread.name} (Copy)` };
-      handleUpdateConfig({
-        schemaThreads: [...config.schemaThreads, newThread]
-      });
-    }
-  };
 
   // System prompt thread handlers
   const handleAddSystemPromptThread = () => {
@@ -479,7 +410,7 @@ export default function GenerateObjectPlaygroundPage({
 
     // Skip if locked
     const ns = (typeof window !== 'undefined' ? (window as unknown as { __PAGE_NS__?: string }).__PAGE_NS__ : undefined);
-    const colKey = getGenerateObjectThreadKey(thread, ns);
+    const colKey = getGenerateTextThreadKey(thread, ns);
     const hasSnap = (typeof window !== 'undefined') ? !!localStorage.getItem(`snapshot:${ns || 'root'}:go-snap:${colKey}`) : false;
     if (hasSnap) return;
 
@@ -492,20 +423,7 @@ export default function GenerateObjectPlaygroundPage({
     }));
 
     try {
-      // Ensure prompt is a string - stringify if it's JSON
-      let promptString = thread.promptDataThread.prompt;
-      try {
-        // Check if prompt is already valid JSON string
-        JSON.parse(promptString);
-        // It's valid JSON, use as is
-      } catch {
-        // Not JSON string, check if it needs stringification
-        if (typeof promptString === 'object') {
-          promptString = JSON.stringify(promptString);
-        }
-      }
-
-      const response = await fetch('/api/generate-object', {
+      const response = await fetch('/api/generate-text', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -513,19 +431,19 @@ export default function GenerateObjectPlaygroundPage({
         body: JSON.stringify({
           model: thread.modelThread.model,
           provider: thread.modelThread.provider,
-          schema: thread.schemaThread.schema,
           system: thread.systemPromptThread.prompt,
-          prompt: promptString
+          prompt: thread.promptDataThread.prompt,
+          temperature: config.temperature,
+          maxOutputTokens: config.maxOutputTokens
         }),
       });
 
       const data = await response.json();
       
       if (!response.ok || !data.success) {
-        const result: GenerateObjectResult = {
+        const result: GenerateTextResult = {
           success: false,
           error: data.error || 'Request failed',
-          validationError: data.isValidationError ? data.error : undefined,
           duration: data.duration || 0,
           finishReason: data.finishReason,
           usage: data.usage
@@ -541,11 +459,10 @@ export default function GenerateObjectPlaygroundPage({
         return;
       }
 
-      const result: GenerateObjectResult = {
+      const result: GenerateTextResult = {
         success: data.success,
-        object: data.object,
+        text: data.text,
         error: data.error,
-        validationError: data.isValidationError ? data.error : undefined,
         duration: data.duration,
         finishReason: data.finishReason,
         usage: data.usage
@@ -560,7 +477,7 @@ export default function GenerateObjectPlaygroundPage({
       }));
 
       // If this column is locked at the moment of completion, snapshot it (covers manual lock before run edge-cases)
-      const key = getGenerateObjectThreadKey(thread, ns);
+      const key = getGenerateTextThreadKey(thread, ns);
       const hasSnapNow = (typeof window !== 'undefined') ? !!localStorage.getItem(`snapshot:${ns || 'root'}:go-snap:${key}`) : false;
       if (hasSnapNow) {
         try {
@@ -570,7 +487,7 @@ export default function GenerateObjectPlaygroundPage({
     } catch (error) {
       console.error('Error running execution thread:', error);
       
-      const result: GenerateObjectResult = {
+      const result: GenerateTextResult = {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error',
         duration: 0
@@ -619,9 +536,9 @@ export default function GenerateObjectPlaygroundPage({
         <div className="flex items-center gap-3">
           <GitBranch className="h-8 w-8 text-purple-600" />
           <div>
-            <h1 className="text-2xl font-bold">GenerateObject Playground</h1>
+            <h1 className="text-2xl font-bold">GenerateText Playground</h1>
             <p className="text-sm text-gray-600">
-              Structured JSON generation &quot; {totalCombinations} {totalCombinations === 1 ? 'combination' : 'combinations'}
+              AI text generation • {totalCombinations} {totalCombinations === 1 ? 'combination' : 'combinations'}
             </p>
           </div>
         </div>
@@ -647,12 +564,7 @@ export default function GenerateObjectPlaygroundPage({
               <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
               Models ({config.modelThreads.length})
             </div>
-            <div>�</div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-              Schemas ({config.schemaThreads.length})
-            </div>
-            <div>�</div>
+            <div>→</div>
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
               System ({config.systemPromptThreads.length})
@@ -674,7 +586,7 @@ export default function GenerateObjectPlaygroundPage({
       {/* Pipeline Threading */}
       <div className="space-y-6">
         {/* Model Threads */}
-        <ModelThreadSection
+        <TextModelThreadSection
           threads={config.modelThreads}
           onAddThread={handleAddModelThread}
           onUpdateThread={handleUpdateModelThread}
@@ -684,19 +596,8 @@ export default function GenerateObjectPlaygroundPage({
           onCopy={handleCopy}
         />
 
-        {/* Schema Threads */}
-        <SchemaThreadSection
-          threads={config.schemaThreads}
-          onAddThread={handleAddSchemaThread}
-          onUpdateThread={handleUpdateSchemaThread}
-          onDeleteThread={handleDeleteSchemaThread}
-          onDuplicateThread={handleDuplicateSchemaThread}
-          copiedStates={copiedStates}
-          onCopy={handleCopy}
-        />
-
         {/* System Prompt Threads */}
-        <SystemPromptThreadSection
+        <TextSystemPromptThreadSection
           threads={config.systemPromptThreads}
           onAddThread={handleAddSystemPromptThread}
           onUpdateThread={handleUpdateSystemPromptThread}
@@ -707,7 +608,7 @@ export default function GenerateObjectPlaygroundPage({
         />
 
         {/* Prompt Data Threads */}
-        <PromptDataThreadSection
+        <TextPromptDataThreadSection
           threads={config.promptDataThreads}
           onAddThread={handleAddPromptDataThread}
           onUpdateThread={handleUpdatePromptDataThread}
@@ -727,7 +628,7 @@ export default function GenerateObjectPlaygroundPage({
           </div>
         </CardHeader>
         <CardContent>
-          <ResultsGrid
+          <TextResultsGrid
             executionThreads={config.executionThreads}
             onRunThread={handleRunExecutionThread}
             onCopy={handleCopy}

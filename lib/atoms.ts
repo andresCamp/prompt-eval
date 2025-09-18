@@ -10,6 +10,11 @@ import type {
   PromptDataThread,
   GenerateObjectResult,
 } from "@/components/generate-object-playground/types";
+import type {
+  GenerateTextExecutionThread,
+  GenerateTextModelThread,
+  GenerateTextResult,
+} from "@/components/generate-text-playground/types";
 
 // Simple atomFamily helper (avoids bringing an extra util)
 function atomFamily<Param, Value>(
@@ -73,8 +78,8 @@ export const snapshotAtomFamily = atomFamily((key: string) =>
   atomWithStorage<GenerateObjectSnapshot | null>(snapKey(key), null, storage)
 );
 
-// Utility to build a snapshot from a runtime thread
-export function buildSnapshotFromThread(
+// Utility to build a snapshot from a runtime object thread
+export function buildSnapshotFromObjectThread(
   thread: GenerateObjectExecutionThread
 ): GenerateObjectSnapshot {
   return {
@@ -162,6 +167,57 @@ export function getSnapshotStorageKey(key: string): string {
 export function getModuleSnapshotStorageKey(key: string): string {
   const ns = getPageNamespace();
   return `snapshot:${ns}:${modSnapKey(key)}`;
+}
+
+// ---------------------------------------------
+// Text Generation specific functions
+// ---------------------------------------------
+
+export interface GenerateTextSnapshot {
+  threadId: string;
+  modelThread: GenerateTextModelThread;
+  systemPromptThread: SystemPromptThread;
+  promptDataThread: PromptDataThread;
+  result?: GenerateTextResult;
+  timestamp: number;
+}
+
+// Utility to build a snapshot from a runtime text thread
+export function buildSnapshotFromTextThread(
+  thread: GenerateTextExecutionThread
+): GenerateTextSnapshot {
+  return {
+    threadId: thread.id,
+    modelThread: thread.modelThread,
+    systemPromptThread: thread.systemPromptThread,
+    promptDataThread: thread.promptDataThread,
+    result: thread.result,
+    timestamp: Date.now(),
+  };
+}
+
+// Generic function for backward compatibility
+export function buildSnapshotFromThread(
+  thread: GenerateTextExecutionThread | GenerateObjectExecutionThread
+): GenerateTextSnapshot | GenerateObjectSnapshot {
+  if ('schemaThread' in thread) {
+    return buildSnapshotFromObjectThread(thread);
+  } else {
+    return buildSnapshotFromTextThread(thread);
+  }
+}
+
+// Stable key for a GenerateText execution column (persists across reloads)
+export function getGenerateTextThreadKey(
+  thread: GenerateTextExecutionThread,
+  namespace?: string
+): string {
+  const base = [
+    thread.modelThread.name,
+    thread.systemPromptThread.name,
+    thread.promptDataThread.name,
+  ].join("|#|");
+  return namespace ? `${namespace}:${base}` : base;
 }
 
 

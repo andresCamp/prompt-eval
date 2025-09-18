@@ -1,14 +1,13 @@
 import { atomWithStorage } from 'jotai/utils';
 import { atomFamily } from 'jotai/utils';
-import type { GenerateObjectConfig } from '@/components/generate-object-playground/types';
+import type { GenerateTextConfig } from '@/components/generate-text-playground/types';
 
 // Chat-specific config atom factory - creates unique storage per chatId
 export const configAtomFamily = atomFamily((chatId: string) =>
-  atomWithStorage<GenerateObjectConfig>(
-    `generate-object-chat-config-${chatId}`,
+  atomWithStorage<GenerateTextConfig>(
+    `generate-text-chat-config-${chatId}`,
     {
       modelThreads: [],
-      schemaThreads: [],
       systemPromptThreads: [],
       promptDataThreads: [],
       executionThreads: []
