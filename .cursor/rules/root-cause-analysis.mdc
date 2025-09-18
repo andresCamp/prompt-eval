@@ -1,0 +1,46 @@
+---
+description: when debugging and fixing errors and when user asks you to "root cause this", access this rule
+globs: 
+alwaysApply: false
+---
+# Root Cause Analysis Approach
+
+When debugging issues or solving problems, always follow this systematic root cause analysis approach:
+
+## 1. Understand the Problem
+- Identify the exact error message or unexpected behavior
+- Determine when and where the issue occurs
+- Note any patterns or conditions that trigger the issue
+- Distinguish between symptoms and the actual problem
+
+## 2. Investigate Systematically
+- Examine relevant code files and their relationships
+- Check for type mismatches, logic errors, or race conditions
+- Look for inconsistencies between different parts of the system
+- Trace the flow of data through the system
+
+## 3. Identify the Root Cause
+- Determine the fundamental issue, not just the symptoms
+- Identify conflicts between components or misaligned assumptions
+- Look for design patterns that might be violated
+- Consider timing issues, state management problems, or type conflicts
+
+## 4. Develop a Targeted Solution
+- Address the root cause directly, not just the symptoms
+- Make minimal changes necessary to fix the issue
+- Ensure the solution is consistent with the overall architecture
+- Consider potential side effects of the proposed changes
+
+## 5. Explain the Solution Clearly
+- Describe what the root cause was in simple terms
+- Explain why the solution addresses the fundamental issue
+- Compare the before and after states to show the improvement
+- Provide context about why the issue occurred in the first place
+
+## 6. Prevent Future Occurrences
+- Suggest improvements to prevent similar issues
+- Recommend testing strategies or validation approaches
+- Identify patterns that could cause similar problems elsewhere
+- Consider documentation or process improvements
+
+Always prioritize understanding why a problem exists over simply making it go away. This leads to more robust solutions and better system understanding. 
