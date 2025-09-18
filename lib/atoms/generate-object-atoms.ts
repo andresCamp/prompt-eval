@@ -2,10 +2,6 @@ import { atom } from 'jotai';
 import { atomWithStorage, RESET } from 'jotai/utils';
 import type {
   GenerateObjectConfig,
-  GenerateObjectModelThread,
-  SchemaThread,
-  SystemPromptThread,
-  PromptDataThread,
 } from '@/components/generate-object-playground/types';
 
 // Lock state atom - persistent

@@ -62,7 +62,7 @@ export async function POST(req: Request) {
     const model = providerFn(modelName);
 
     // Build the generateObject parameters based on output type
-    const generateParams: Record<string, any> = {
+    const generateParams: Record<string, unknown> = {
       model,
       prompt,
     };
@@ -146,7 +146,7 @@ export async function POST(req: Request) {
     let result;
     
     try {
-      result = await generateObject(generateParams);
+      result = await generateObject(generateParams as Parameters<typeof generateObject>[0]);
     } catch (error) {
       // Handle specific API errors
       const errorMessage = error instanceof Error ? error.message : String(error);

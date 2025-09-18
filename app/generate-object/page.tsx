@@ -280,7 +280,8 @@ export default function GenerateObjectPlaygroundPage() {
     config?.modelThreads,
     config?.schemaThreads,
     config?.systemPromptThreads,
-    config?.promptDataThreads
+    config?.promptDataThreads,
+    setConfig
   ]);
 
   const handleUpdateConfig = (updates: Partial<GenerateObjectConfig>) => {

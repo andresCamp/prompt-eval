@@ -7,11 +7,11 @@
 
 'use client';
 
-import { useState } from 'react';
+
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Play, Loader2, Clock, Hash, FileText, Copy, Check, ChevronDown, ChevronRight } from 'lucide-react';
+import { Play, Loader2, ChevronDown, ChevronRight } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { MetricsBadge } from './shared/MetricsBadge';
 import { CopyButton } from './shared/CopyButton';
@@ -114,7 +114,7 @@ interface ExecutionThreadCardProps {
 function ExecutionThreadCard({
   thread,
   onRunThread,
-  onUpdateThread,
+  // onUpdateThread,
   copiedStates,
   onCopy
 }: ExecutionThreadCardProps) {
@@ -122,19 +122,19 @@ function ExecutionThreadCard({
     onCopy(response, responseId);
   };
 
-  const handleCopyThreadState = (text: string, buttonId: string) => {
-    onUpdateThread(thread.id, {
-      copiedStates: { ...thread.copiedStates, [buttonId]: true }
-    });
+  // const handleCopyThreadState = (text: string, buttonId: string) => {
+  //   onUpdateThread(thread.id, {
+  //     copiedStates: { ...thread.copiedStates, [buttonId]: true }
+  //   });
     
-    navigator.clipboard.writeText(text).then(() => {
-      setTimeout(() => {
-        onUpdateThread(thread.id, {
-          copiedStates: { ...thread.copiedStates, [buttonId]: false }
-        });
-      }, 3000);
-    });
-  };
+  //   navigator.clipboard.writeText(text).then(() => {
+  //     setTimeout(() => {
+  //       onUpdateThread(thread.id, {
+  //         copiedStates: { ...thread.copiedStates, [buttonId]: false }
+  //       });
+  //     }, 3000);
+  //   });
+  // };
 
   return (
     <Card className="h-full">

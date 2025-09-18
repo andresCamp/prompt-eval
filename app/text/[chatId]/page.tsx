@@ -262,7 +262,8 @@ export default function GenerateTextPlaygroundPage({
   }, [
     config?.modelThreads,
     config?.systemPromptThreads,
-    config?.promptDataThreads
+    config?.promptDataThreads,
+    setConfig
   ]);
 
   const handleUpdateConfig = (updates: Partial<GenerateTextConfig>) => {

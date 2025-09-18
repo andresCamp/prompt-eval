@@ -35,7 +35,7 @@ interface CollapsibleCardProps {
 }
 
 export function CollapsibleCard({
-  id,
+  // id,
   name,
   onNameChange,
   onCopy = () => {},

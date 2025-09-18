@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Loader2, Play, Copy, Check, Clock, Hash, Lock, Unlock } from 'lucide-react';
-import { GenerateTextExecutionThread } from './types';
+import { GenerateTextExecutionThread, GenerateTextResult } from './types';
 import { useAtom } from 'jotai';
 import { snapshotAtomFamily, buildSnapshotFromThread, getGenerateTextThreadKey } from '@/lib/atoms';
 import { usePersistentLock } from '@/lib/hooks';
@@ -55,8 +55,9 @@ export function TextResultsGrid({
     const [snapshot] = useAtom(snapshotAtomFamily(stableKey));
     const isLocked = !!snapshot;
     const resp = (isLocked && snapshot?.result) ? snapshot.result : thread.result;
+    const textResp = resp as GenerateTextResult | undefined;
 
-    if (!resp) {
+    if (!textResp) {
       return thread.isRunning ? (
         <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400 text-xs">
           <Loader2 className="h-3 w-3 animate-spin" /> Generating...
@@ -66,16 +67,16 @@ export function TextResultsGrid({
       );
     }
 
-    if (resp.error) {
+    if (textResp.error) {
       return (
         <div className="text-red-600 dark:text-red-400 text-xs">
-          Error: {resp.error}
+          Error: {textResp.error}
         </div>
       );
     }
 
-    const durationText = resp.duration !== undefined ? `${resp.duration.toFixed(1)}s` : '--';
-    const tokenCount = resp.usage?.totalTokens || ((resp.usage?.inputTokens || 0) + (resp.usage?.outputTokens || 0)) || 0;
+    const durationText = textResp.duration !== undefined ? `${textResp.duration.toFixed(1)}s` : '--';
+    const tokenCount = textResp.usage?.totalTokens || ((textResp.usage?.inputTokens || 0) + (textResp.usage?.outputTokens || 0)) || 0;
 
     return (
       <div className="flex flex-col gap-1">
@@ -94,7 +95,7 @@ export function TextResultsGrid({
             className="h-6 w-6 hover:bg-muted"
             onClick={(e) => {
               e.stopPropagation();
-              onCopy(resp.text || '', `cell-${thread.id}`);
+              onCopy(textResp.text || '', `cell-${thread.id}`);
             }}
           >
             {copiedStates[`cell-${thread.id}`] ? (
@@ -106,7 +107,7 @@ export function TextResultsGrid({
         </div>
         <div className="max-h-32 overflow-y-auto">
           <div className="text-[10px] whitespace-pre-wrap break-words text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-900 rounded p-2">
-            {resp.text}
+            {textResp.text}
           </div>
         </div>
       </div>
@@ -394,7 +395,7 @@ function LockToggle({ thread }: { thread: GenerateTextExecutionThread }) {
   const { isLocked, lockWith, unlock } = usePersistentLock(stableKey, 'cell');
 
   const toggle = () => {
-    if (!isLocked) lockWith(buildSnapshotFromThread(thread));
+    if (!isLocked) lockWith(buildSnapshotFromThread(thread) as Parameters<typeof lockWith>[0]);
     else unlock();
   };
 

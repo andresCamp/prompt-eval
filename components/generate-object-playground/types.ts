@@ -47,7 +47,7 @@ export interface GenerateObjectExecutionThread {
 
 export interface GenerateObjectResult {
   success: boolean;
-  object?: any; // The generated JSON object
+  object?: unknown; // The generated JSON object
   error?: string;
   validationError?: string;
   duration?: number;

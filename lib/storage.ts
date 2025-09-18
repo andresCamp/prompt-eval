@@ -8,7 +8,7 @@ export interface StorageOptions {
   version?: number;
 }
 
-export class PageScopedStorage implements SyncStorage<any> {
+export class PageScopedStorage<T = unknown> implements SyncStorage<T> {
   private prefix: string;
   private version: number;
   private debugLabel: string;
@@ -44,7 +44,7 @@ export class PageScopedStorage implements SyncStorage<any> {
     return fullKey;
   }
 
-  getItem(key: string): string | null {
+  getItem(key: string, initialValue: T): T {
     try {
       const fullKey = this.getFullKey(key);
       const item = localStorage.getItem(fullKey);
@@ -59,7 +59,7 @@ export class PageScopedStorage implements SyncStorage<any> {
         });
       }
       
-      if (item === null) return null;
+      if (item === null) return initialValue;
       
       const parsed = JSON.parse(item);
       if (parsed._v !== this.version) {
@@ -70,42 +70,39 @@ export class PageScopedStorage implements SyncStorage<any> {
           });
         }
         this.removeItem(key);
-        return null;
+        return initialValue;
       }
       
-      const result = JSON.stringify(parsed.data);
       if (DEBUG) {
         console.log(`${this.debugLabel} getItem success:`, {
           key,
           dataType: typeof parsed.data,
-          dataKeys: parsed.data ? Object.keys(parsed.data) : null,
-          resultLength: result.length
+          dataKeys: parsed.data ? Object.keys(parsed.data) : null
         });
       }
       
-      return result;
+      return parsed.data;
     } catch (error) {
       console.error(`${this.debugLabel} Error reading from storage key ${key}:`, error);
-      return null;
+      return initialValue;
     }
   }
 
-  setItem(key: string, value: string): void {
+  setItem(key: string, value: T): void {
     try {
       const fullKey = this.getFullKey(key);
-      const parsedValue = JSON.parse(value);
       const wrapped = {
         _v: this.version,
         _t: Date.now(),
-        data: parsedValue
+        data: value
       };
       
       if (DEBUG) {
         console.log(`${this.debugLabel} setItem:`, {
           key,
           fullKey,
-          valueType: typeof parsedValue,
-          valueKeys: parsedValue ? Object.keys(parsedValue) : null,
+          valueType: typeof value,
+          valueKeys: value ? Object.keys(value) : null,
           wrappedKeys: Object.keys(wrapped),
           timestamp: wrapped._t
         });
@@ -128,7 +125,13 @@ export class PageScopedStorage implements SyncStorage<any> {
         
         try {
           const fullKey = this.getFullKey(key);
-          localStorage.setItem(fullKey, value);
+          const wrapped = {
+            _v: this.version,
+            _t: Date.now(),
+            data: value
+          };
+          const stringified = JSON.stringify(wrapped);
+          localStorage.setItem(fullKey, stringified);
         } catch (retryError) {
           console.error(`${this.debugLabel} Failed to store after cleanup:`, retryError);
           throw error;
@@ -158,14 +161,23 @@ export class PageScopedStorage implements SyncStorage<any> {
 
   subscribe?(
     key: string,
-    callback: (value: string | null) => void,
-    initialValue: string | null
+    callback: (value: T) => void,
+    initialValue: T
   ): () => void {
     const fullKey = this.getFullKey(key);
     
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === fullKey) {
-        callback(e.newValue);
+        if (e.newValue === null) {
+          callback(initialValue);
+        } else {
+          try {
+            const parsed = JSON.parse(e.newValue);
+            callback(parsed.data);
+          } catch {
+            callback(initialValue);
+          }
+        }
       }
     };
 
@@ -257,31 +269,31 @@ export class PageScopedStorage implements SyncStorage<any> {
   }
 }
 
-export function createPageScopedStorage(pageId: string): PageScopedStorage {
+export function createPageScopedStorage<T = unknown>(pageId: string): PageScopedStorage<T> {
   // Sanitize pageId to remove special characters
   const sanitizedPageId = pageId.replace(/[^a-zA-Z0-9-_]/g, '_');
-  return new PageScopedStorage({ pageId: sanitizedPageId });
+  return new PageScopedStorage<T>({ pageId: sanitizedPageId });
 }
 
-export function createCellStorage(pageId: string, rowId: string, columnId: string): PageScopedStorage {
+export function createCellStorage<T = unknown>(pageId: string, rowId: string, columnId: string): PageScopedStorage<T> {
   // Sanitize all IDs to remove special characters
   const sanitizedPageId = pageId.replace(/[^a-zA-Z0-9-_]/g, '_');
   const sanitizedRowId = rowId.replace(/[^a-zA-Z0-9-_]/g, '_');
   const sanitizedColumnId = columnId.replace(/[^a-zA-Z0-9-_]/g, '_');
-  
-  return new PageScopedStorage({ 
+
+  return new PageScopedStorage<T>({
     pageId: sanitizedPageId,
     prefix: `cell_${sanitizedRowId}_${sanitizedColumnId}`
   });
 }
 
-export function createThreadStorage(pageId: string, threadType: string, threadId: string): PageScopedStorage {
+export function createThreadStorage<T = unknown>(pageId: string, threadType: string, threadId: string): PageScopedStorage<T> {
   // Sanitize all IDs to remove special characters
   const sanitizedPageId = pageId.replace(/[^a-zA-Z0-9-_]/g, '_');
   const sanitizedThreadType = threadType.replace(/[^a-zA-Z0-9-_]/g, '_');
   const sanitizedThreadId = threadId.replace(/[^a-zA-Z0-9-_]/g, '_');
-  
-  return new PageScopedStorage({
+
+  return new PageScopedStorage<T>({
     pageId: sanitizedPageId,
     prefix: `thread_${sanitizedThreadType}_${sanitizedThreadId}`
   });

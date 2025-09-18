@@ -1,8 +1,8 @@
 import { atom } from 'jotai';
 import { atomWithStorage, RESET } from 'jotai/utils';
+import type { SyncStorage } from 'jotai/vanilla/utils/atomWithStorage';
 import { 
   createPageScopedStorage, 
-  createCellStorage, 
   createThreadStorage 
 } from '../storage';
 import type { 
@@ -10,7 +10,6 @@ import type {
   CellSnapshot, 
   ModuleSnapshot,
   SnapshotState,
-  SnapshotComparison
 } from '../types/snapshot';
 
 const DEBUG = true;
@@ -19,7 +18,7 @@ export const createThreadSnapshotAtom = (
   pageId: string,
   threadType: string,
   threadId: string,
-  initialValue: any = null
+  initialValue: ThreadSnapshot | null = null
 ) => {
   const atomKey = `${threadType}:${threadId}`;
   
@@ -33,18 +32,18 @@ export const createThreadSnapshotAtom = (
     });
   }
   
-  const storage = createThreadStorage(pageId, threadType, threadId);
-  
+  const storage = createThreadStorage<ThreadSnapshot | null>(pageId, threadType, threadId);
+
   const baseAtom = atomWithStorage<ThreadSnapshot | null>(
     atomKey,
     initialValue,
-    storage,
+    storage as SyncStorage<ThreadSnapshot | null>,
     { getOnInit: true }
   );
 
   const isLockedAtom = atom(
     (get) => {
-      const snapshot = get(baseAtom);
+      const snapshot = get(baseAtom) as ThreadSnapshot | CellSnapshot | null;
       const isLocked = snapshot?.isLocked ?? false;
       if (DEBUG) {
         console.log('[Atom] isLockedAtom read:', {
@@ -60,7 +59,7 @@ export const createThreadSnapshotAtom = (
 
   const stateAtom = atom<SnapshotState>(
     (get) => {
-      const snapshot = get(baseAtom);
+      const snapshot = get(baseAtom) as ThreadSnapshot | null;
       if (!snapshot) return 'unlocked';
       if (!snapshot.isLocked) return 'unlocked';
       
@@ -70,7 +69,7 @@ export const createThreadSnapshotAtom = (
 
   const lockAtom = atom(
     null,
-    (get, set, value: any) => {
+    async (get, set, value: unknown) => {
       const snapshot: ThreadSnapshot = {
         metadata: {
           id: `${threadType}:${threadId}:${Date.now()}`,
@@ -79,7 +78,7 @@ export const createThreadSnapshotAtom = (
           hash: generateHash(value),
           pageId
         },
-        type: threadType as any,
+        type: threadType as "model" | "data" | "system" | "initial" | "user",
         threadId,
         value,
         isLocked: true
@@ -135,13 +134,11 @@ export const createCellSnapshotAtom = (
     });
   }
   
-  const storage = createCellStorage(pageId, rowId, columnId);
+
   
   const baseAtom = atomWithStorage<CellSnapshot | null>(
     atomKey,
     null,
-    storage,
-    { getOnInit: true }
   );
   
   // Debug hydration on mount
@@ -165,7 +162,7 @@ export const createCellSnapshotAtom = (
 
   const isLockedAtom = atom(
     (get) => {
-      const snapshot = get(baseAtom);
+      const snapshot = get(baseAtom) as ThreadSnapshot | CellSnapshot | null;
       const isLocked = snapshot?.isLocked ?? false;
       if (DEBUG) {
         console.log('[Atom] Cell isLockedAtom read:', {
@@ -183,7 +180,7 @@ export const createCellSnapshotAtom = (
 
   const hasChangesAtom = atom(
     (get) => {
-      const snapshot = get(baseAtom);
+      const snapshot = get(baseAtom) as ThreadSnapshot | CellSnapshot | null;
       if (!snapshot || !snapshot.isLocked) return false;
       
       return false;
@@ -192,7 +189,7 @@ export const createCellSnapshotAtom = (
 
   const lockAtom = atom(
     null,
-    (get, set, result: CellSnapshot['result']) => {
+    async (get, set, result: CellSnapshot['result']) => {
       const snapshot: CellSnapshot = {
         metadata: {
           id: `cell:${rowId}:${columnId}:${Date.now()}`,
@@ -292,7 +289,7 @@ export const getThreadSnapshotAtoms = (
   pageId: string,
   threadType: string,
   threadId: string,
-  initialValue?: any
+  initialValue?: ThreadSnapshot | null
 ) => {
   const key = `${pageId}_${threadType}_${threadId}`;
   
@@ -332,14 +329,14 @@ export const pageSnapshotAtom = atom<ModuleSnapshot | null>(null);
 export const allCellSnapshotsAtom = atom(
   (get) => {
     const snapshots: CellSnapshot[] = [];
-    
-    cellSnapshotAtomsMap.forEach((atoms) => {
-      const snapshot = get(atoms.snapshotAtom);
+
+    for (const atoms of cellSnapshotAtomsMap.values()) {
+      const snapshot = get(atoms.snapshotAtom) as ThreadSnapshot | CellSnapshot | null;
       if (snapshot) {
-        snapshots.push(snapshot);
+        snapshots.push(snapshot as CellSnapshot);
       }
-    });
-    
+    }
+
     return snapshots;
   }
 );
@@ -347,14 +344,14 @@ export const allCellSnapshotsAtom = atom(
 export const allThreadSnapshotsAtom = atom(
   (get) => {
     const snapshots: ThreadSnapshot[] = [];
-    
-    threadSnapshotAtomsMap.forEach((atoms) => {
-      const snapshot = get(atoms.snapshotAtom);
+
+    for (const atoms of threadSnapshotAtomsMap.values()) {
+      const snapshot = get(atoms.snapshotAtom) as ThreadSnapshot | CellSnapshot | null;
       if (snapshot) {
-        snapshots.push(snapshot);
+        snapshots.push(snapshot as ThreadSnapshot);
       }
-    });
-    
+    }
+
     return snapshots;
   }
 );
@@ -364,7 +361,7 @@ export const totalLockedCellsAtom = atom(
     let count = 0;
     
     cellSnapshotAtomsMap.forEach((atoms) => {
-      if (get(atoms.isLockedAtom)) {
+      if (get(atoms.isLockedAtom) as boolean) {
         count++;
       }
     });
@@ -378,7 +375,7 @@ export const totalLockedThreadsAtom = atom(
     let count = 0;
     
     threadSnapshotAtomsMap.forEach((atoms) => {
-      if (get(atoms.isLockedAtom)) {
+      if (get(atoms.isLockedAtom) as boolean) {
         count++;
       }
     });
@@ -387,7 +384,7 @@ export const totalLockedThreadsAtom = atom(
   }
 );
 
-function generateHash(value: any): string {
+function generateHash(value: unknown): string {
   const str = JSON.stringify(value);
   let hash = 0;
   

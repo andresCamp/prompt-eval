@@ -74,32 +74,32 @@ export const calculateCost = (
 /**
  * Biographer data structure for template replacement
  */
-interface BiographerData {
-  name: string;
-  mbti: string;
-  enneagram: string;
-  bigFive: {
-    openness: number;
-    conscientiousness: number;
-    extraversion: number;
-    agreeableness: number;
-    neuroticism: number;
-  };
-  coreValues: string[];
-  voice_characteristics: {
-    vocabulary: string[];
-    address_terms: string[];
-    sentence_structure: string;
-    rhythm: string;
-  };
-  linguistic_patterns: {
-    question_formation: string;
-    validation_sounds: string;
-    transition_phrases: string;
-    enthusiasm_markers: string;
-  };
-  example_utterances: string[];
-}
+// interface BiographerData {
+//   name: string;
+//   mbti: string;
+//   enneagram: string;
+//   bigFive: {
+//     openness: number;
+//     conscientiousness: number;
+//     extraversion: number;
+//     agreeableness: number;
+//     neuroticism: number;
+//   };
+//   coreValues: string[];
+//   voice_characteristics: {
+//     vocabulary: string[];
+//     address_terms: string[];
+//     sentence_structure: string;
+//     rhythm: string;
+//   };
+//   linguistic_patterns: {
+//     question_formation: string;
+//     validation_sounds: string;
+//     transition_phrases: string;
+//     enthusiasm_markers: string;
+//   };
+//   example_utterances: string[];
+// }
 
 /**
  * Replace template variables in a string with values from a biographer object

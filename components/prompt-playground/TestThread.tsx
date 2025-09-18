@@ -9,8 +9,8 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Play, Loader2, Plus, Trash2, Copy, Check } from 'lucide-react';
+import { Card, CardHeader, CardTitle } from '@/components/ui/card';
+import { Play, Loader2, Plus, Trash2 } from 'lucide-react';
 import { TestThreadProps } from './shared/types';
 import { ResponsesSection } from './ResponsesSection';
 import { ProviderSelector, ModelSelector } from './shared/ModelSelector';

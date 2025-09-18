@@ -1,5 +1,5 @@
-import { atom, useAtom, useSetAtom } from 'jotai'
-import { atomFamily, atomWithStorage, useResetAtom, RESET, atomWithReset } from 'jotai/utils'
+import { atom } from 'jotai'
+import { atomFamily, atomWithStorage, RESET } from 'jotai/utils'
 import { generateId } from '@/components/prompt-playground/shared/utils'
 import type { 
   GenerateObjectModelThread, 
@@ -35,7 +35,7 @@ export const promptDataThreadAtomFamily = atomFamily((threadId: string) =>
 // Global settings atom
 export const globalSettingsAtom = atomWithStorage('generate-object-settings', {
   temperature: 0.7,
-  outputMode: 'object' as 'object'
+  outputMode: 'object' as const
 })
 
 // Derived atoms - compute collections from individual threads

@@ -7,7 +7,7 @@ export interface SnapshotMetadata {
   userId?: string;
 }
 
-export interface ThreadSnapshot<T = any> {
+export interface ThreadSnapshot<T = unknown> {
   metadata: SnapshotMetadata;
   type: 'model' | 'data' | 'system' | 'initial' | 'user';
   threadId: string;
@@ -45,7 +45,7 @@ export interface ModuleSnapshot {
   cells: CellSnapshot[];
 }
 
-export interface SnapshotDiff<T = any> {
+export interface SnapshotDiff<T = unknown> {
   type: 'added' | 'removed' | 'modified' | 'unchanged';
   path: string;
   oldValue?: T;

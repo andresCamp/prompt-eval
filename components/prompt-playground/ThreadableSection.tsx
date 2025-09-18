@@ -7,15 +7,12 @@
 
 'use client';
 
-import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus, Copy, Trash2, ChevronDown, Hash, FileText, Check } from 'lucide-react';
-import { ModelSelector } from './shared/ModelSelector';
-import { CopyButton } from './shared/CopyButton';
 import {
   MODEL_PROVIDER_MAP,
 } from './shared/types';
@@ -25,7 +22,6 @@ import type {
   SystemPromptThread, 
   InitialMessageThread, 
   UserMessageThread,
-  ThreadableStage
 } from './shared/types';
 
 // Utility functions for metrics

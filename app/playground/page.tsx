@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /**
  * @fileoverview Pipeline Threading Playground
  * 
@@ -20,11 +21,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Loader2, Plus, Play, Copy, Trash2, GitBranch, Clock, FileText, Hash, Check, Brain, Database, Cpu, MessageSquare, User as UserIcon, Eye, EyeOff } from 'lucide-react';
+import { Loader2, Plus, Play, Copy, GitBranch, Clock, FileText, Hash, Check, Brain, Database, Cpu, MessageSquare, User as UserIcon } from 'lucide-react';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import {
   ModelThread,
@@ -36,19 +35,9 @@ import {
   PipelineConfig,
   BiographerResponse,
   MODEL_PROVIDER_MAP,
-  ConversationTurn,
 } from '@/components/prompt-playground/shared/types';
 import { CollapsibleCard } from '@/components/prompt-playground/shared/CollapsibleCard';
 import { 
-  biographers,
-  DEFAULT_SYSTEM_PROMPT,
-  DEFAULT_INITIAL_MESSAGE,
-  DEFAULT_USER_MESSAGE
-} from './defaults';
-
-import { 
-  ThreadableSection,
-  ExecutionResults,
   renderModelThread,
   renderDataThread,
   renderSystemPromptThread,
@@ -58,11 +47,11 @@ import {
   updateExecutionThreads,
   replaceTemplate,
   generateId,
-  generateExecutionThreads,
   createExecutionBatches,
   calculateCombinationCount
 } from '@/components/prompt-playground';
-
+import { DEFAULT_SYSTEM_PROMPT, DEFAULT_INITIAL_MESSAGE, DEFAULT_USER_MESSAGE } from './defaults';
+import { biographers } from './defaults';
 
 
 export default function PipelineThreadingPlaygroundPage() {

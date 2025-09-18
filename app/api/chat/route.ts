@@ -1,17 +1,15 @@
 import { openai } from '@ai-sdk/openai';
-// eslint-disable-next-line @typescript-eslint/consistent-type-imports
+ 
 import { anthropic } from '@ai-sdk/anthropic';
-// eslint-disable-next-line @typescript-eslint/consistent-type-imports, @typescript-eslint/ban-ts-comment
-// @ts-ignore types may be missing for Google provider
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 
 // Create Google provider instance with explicit API key from GEMINI_API_KEY
 const google = createGoogleGenerativeAI({
   // Expect variable to be defined in the environment
-  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+   
   apiKey: process.env.GEMINI_API_KEY!,
 });
-// eslint-disable-next-line @typescript-eslint/consistent-type-imports
+ 
 import { groq } from '@ai-sdk/groq';
 import { generateText } from 'ai';
 
