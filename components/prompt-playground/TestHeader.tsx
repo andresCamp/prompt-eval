@@ -5,7 +5,6 @@
 import { Button } from '@/components/ui/button';
 import { Play, Loader2, Copy, Check } from 'lucide-react';
 import { ProviderSelector, ModelSelector } from './shared/ModelSelector';
-import { CopyButton } from './shared/CopyButton';
 import { formatTestConfig } from './shared/utils';
 
 /**

@@ -1,6 +1,6 @@
 'use client';
 
-import { Lock, Unlock, AlertCircle } from 'lucide-react';
+import { Lock, Unlock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Tooltip,

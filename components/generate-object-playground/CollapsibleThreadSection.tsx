@@ -59,12 +59,6 @@ interface BaseThreadSectionProps<T> {
 
 type BaseThread = { id: string; name: string; visible: boolean };
 
-type UnionThread =
-  | import('./types').GenerateObjectModelThread
-  | import('./types').SchemaThread
-  | import('./types').SystemPromptThread
-  | import('./types').PromptDataThread;
-
 function CollapsibleThreadSection<T extends BaseThread>({
   title,
   threads,

@@ -13,7 +13,7 @@ import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Loader2, Play, Copy, Check, Clock, Hash, Lock, Unlock } from 'lucide-react';
 import { GenerateObjectExecutionThread } from './types';
 import { useAtom } from 'jotai';
-import { snapshotAtomFamily, buildSnapshotFromThread, getGenerateObjectThreadKey } from '@/lib/atoms';
+import { snapshotAtomFamily, buildSnapshotFromObjectThread, getGenerateObjectThreadKey } from '@/lib/atoms';
 import { usePersistentLock } from '@/lib/hooks';
 
 interface ResultsGridProps {
@@ -209,7 +209,7 @@ export function ResultsGrid({
                 </>
               )}
             </Button>
-            {thread.result?.object && (
+            {(thread.result?.object !== undefined && thread.result?.object !== null) && (
               <Button
                 size="sm"
                 variant="outline"
@@ -395,7 +395,7 @@ function LockToggle({ thread }: { thread: GenerateObjectExecutionThread }) {
   const { isLocked, lockWith, unlock } = usePersistentLock(stableKey, 'cell');
 
   const toggle = () => {
-    if (!isLocked) lockWith(buildSnapshotFromThread(thread));
+    if (!isLocked) lockWith(buildSnapshotFromObjectThread(thread));
     else unlock();
   };
 

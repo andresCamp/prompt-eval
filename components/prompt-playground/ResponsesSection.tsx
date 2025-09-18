@@ -9,7 +9,7 @@ import { Loader2, Copy, Check } from 'lucide-react';
 import { BiographerResponse } from './shared/types';
 import { MetricsBadge } from './shared/MetricsBadge';
 import { CopyButton } from './shared/CopyButton';
-import { formatAllResponses } from './shared/utils';
+
 
 /**
  * Props for ResponsesSection component

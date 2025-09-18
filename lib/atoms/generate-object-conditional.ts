@@ -21,23 +21,28 @@ export const workingConfigAtom = atom<GenerateObjectConfig>({
 
 // Conditional storage - only when locked
 const conditionalStorage = {
-  getItem: (key: string) => {
+  getItem: (key: string, initialValue: unknown) => {
     // Only read from storage if we're locked
     const isLocked = localStorage.getItem('generate-object-locked') === 'true';
     if (!isLocked) {
       console.log('🔓 Not locked - ignoring stored config');
-      return null;
+      return initialValue;
     }
     const stored = localStorage.getItem(key);
     console.log('📥 Reading from storage (locked):', !!stored);
-    return stored;
+    if (stored === null) return initialValue;
+    try {
+      return JSON.parse(stored);
+    } catch {
+      return initialValue;
+    }
   },
-  setItem: (key: string, value: string) => {
+  setItem: (key: string, value: unknown) => {
     // Only save to storage if we're locked
     const isLocked = localStorage.getItem('generate-object-locked') === 'true';
     if (isLocked) {
       console.log('💾 Saving to storage (locked)');
-      localStorage.setItem(key, value);
+      localStorage.setItem(key, JSON.stringify(value));
     } else {
       console.log('🔓 Not locked - not saving to storage');
     }

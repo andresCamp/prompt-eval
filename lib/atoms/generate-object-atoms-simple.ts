@@ -1,5 +1,4 @@
 import { atom } from 'jotai';
-import { atomWithStorage, RESET } from 'jotai/utils';
 import type { GenerateObjectConfig } from '@/components/generate-object-playground/types';
 
 // Simple approach: Just use regular atoms + manual localStorage

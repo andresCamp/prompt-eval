@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import { useAtom, useSetAtom } from 'jotai';
 import { Button } from '@/components/ui/button';
-import { ThreadLockButton } from '@/components/snapshot/ThreadLockButton';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { 
   isLockedAtom,
@@ -14,7 +13,6 @@ import { Lock, Unlock } from 'lucide-react';
 
 export function SnapshotTestButton() {
   const [testValue, setTestValue] = useState({ test: 'data', timestamp: Date.now() });
-  const pageId = 'generate-object';
   
   const [isLocked] = useAtom(isLockedAtom);
   const lock = useSetAtom(lockAtom);
@@ -72,9 +70,9 @@ export function SnapshotTestButton() {
           <p><strong>Instructions:</strong></p>
           <ul className="list-disc list-inside space-y-1 ml-2">
             <li>Make changes to threads above</li>
-            <li>Click "Lock Config" to save to localStorage</li>
+            <li>Click &quot;Lock Config&quot; to save to localStorage</li>
             <li>Refresh page - changes should persist</li>
-            <li>Click "Unlock Config" to clear localStorage</li>
+            <li>Click &quot;Unlock Config&quot; to clear localStorage</li>
             <li>Refresh page - should reset to defaults</li>
           </ul>
         </div>

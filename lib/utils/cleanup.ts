@@ -4,7 +4,7 @@ import {
   cleanupAllSnapshots
 } from '../atoms/snapshot-atoms';
 import { PageScopedStorage } from '../storage';
-import { RESET } from 'jotai/utils';
+
 
 export interface CleanupOptions {
   pageId: string;
@@ -87,10 +87,10 @@ export class SnapshotCleanup {
 
     for (const key of keys) {
       try {
-        const rawData = this.storage.getItem(key);
+        const rawData = this.storage.getItem(key, null);
         if (!rawData) continue;
 
-        const snapshot = JSON.parse(rawData);
+        const snapshot = typeof rawData === 'string' ? JSON.parse(rawData) : rawData;
         const age = now - (snapshot.metadata?.timestamp || 0);
 
         let shouldClean = false;
@@ -202,9 +202,9 @@ export class SnapshotCleanup {
       }
 
       try {
-        const data = this.storage.getItem(key);
+        const data = this.storage.getItem(key, null);
         if (data) {
-          const snapshot = JSON.parse(data);
+          const snapshot = typeof data === 'string' ? JSON.parse(data) : data;
           const timestamp = snapshot.metadata?.timestamp || snapshot._t;
           
           if (timestamp) {

@@ -5,7 +5,7 @@ import type {
   CellSnapshot
 } from '../types/snapshot';
 
-export function deepCompare(obj1: any, obj2: any, path: string = ''): SnapshotDiff[] {
+export function deepCompare(obj1: unknown, obj2: unknown, path: string = ''): SnapshotDiff[] {
   const diffs: SnapshotDiff[] = [];
 
   if (obj1 === obj2) {
@@ -85,25 +85,28 @@ export function deepCompare(obj1: any, obj2: any, path: string = ''): SnapshotDi
     return diffs;
   }
 
-  const keys = new Set([...Object.keys(obj1), ...Object.keys(obj2)]);
+  const obj1AsRecord = obj1 as Record<string, unknown>;
+  const obj2AsRecord = obj2 as Record<string, unknown>;
+
+  const keys = new Set([...Object.keys(obj1AsRecord), ...Object.keys(obj2AsRecord)]);
   
   for (const key of keys) {
     const keyPath = path ? `${path}.${key}` : key;
     
-    if (!(key in obj1)) {
+    if (!(key in obj1AsRecord)) {
       diffs.push({
         type: 'added',
         path: keyPath,
-        newValue: obj2[key]
+        newValue: obj2AsRecord[key]
       });
-    } else if (!(key in obj2)) {
+    } else if (!(key in obj2AsRecord)) {
       diffs.push({
         type: 'removed',
         path: keyPath,
-        oldValue: obj1[key]
+        oldValue: obj1AsRecord[key]
       });
     } else {
-      diffs.push(...deepCompare(obj1[key], obj2[key], keyPath));
+      diffs.push(...deepCompare(obj1AsRecord[key], obj2AsRecord[key], keyPath));
     }
   }
   
@@ -111,8 +114,8 @@ export function deepCompare(obj1: any, obj2: any, path: string = ''): SnapshotDi
 }
 
 export function createComparison(
-  oldValue: any,
-  newValue: any,
+  oldValue: unknown,
+  newValue: unknown,
   path: string = ''
 ): SnapshotComparison {
   const diffs = deepCompare(oldValue, newValue, path);
@@ -174,7 +177,7 @@ export function compareCellSnapshots(
   return createComparison(result1, result2, 'cell.result');
 }
 
-export function generateSnapshotHash(value: any): string {
+export function generateSnapshotHash(value: unknown): string {
   const str = JSON.stringify(value);
   let hash = 0;
   
@@ -187,17 +190,28 @@ export function generateSnapshotHash(value: any): string {
   return hash.toString(36);
 }
 
-export function validateSnapshot(snapshot: any): boolean {
+export function validateSnapshot(snapshot: unknown): boolean {
   if (!snapshot) return false;
+
+  const typedSnapshot = snapshot as ThreadSnapshot | CellSnapshot;
   
-  if (!snapshot.metadata) return false;
-  if (!snapshot.metadata.id) return false;
-  if (!snapshot.metadata.timestamp) return false;
-  if (!snapshot.metadata.version) return false;
-  if (!snapshot.metadata.hash) return false;
+  if (!typedSnapshot.metadata) return false;
+  if (!typedSnapshot.metadata.id) return false;
+  if (!typedSnapshot.metadata.timestamp) return false;
+  if (!typedSnapshot.metadata.version) return false;
+  if (!typedSnapshot.metadata.hash) return false;
   
-  const calculatedHash = generateSnapshotHash(snapshot.value || snapshot.result);
-  return calculatedHash === snapshot.metadata.hash;
+  let contentToHash: unknown;
+  if ('value' in typedSnapshot) {
+    contentToHash = typedSnapshot.value;
+  } else if ('result' in typedSnapshot) {
+    contentToHash = typedSnapshot.result;
+  } else {
+    return false;
+  }
+
+  const calculatedHash = generateSnapshotHash(contentToHash);
+  return calculatedHash === typedSnapshot.metadata.hash;
 }
 
 export function formatDiffPath(path: string): string {
@@ -262,7 +276,11 @@ export function mergeSnapshots<T extends ThreadSnapshot | CellSnapshot>(
     metadata: {
       ...base.metadata,
       timestamp: Date.now(),
-      hash: generateSnapshotHash(changes.value || (changes as any).result || base.value || (base as any).result)
+      hash: generateSnapshotHash(
+        'value' in base
+          ? (changes as Partial<ThreadSnapshot>).value ?? base.value
+          : (changes as Partial<CellSnapshot>).result ?? base.result
+      )
     }
   };
 }

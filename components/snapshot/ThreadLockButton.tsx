@@ -12,7 +12,7 @@ interface ThreadLockButtonProps {
   pageId: string;
   threadType: 'model' | 'data' | 'system' | 'initial' | 'user';
   threadId: string;
-  currentValue: any;
+  currentValue: unknown;
   className?: string;
   size?: 'sm' | 'md' | 'lg';
   onLockChange?: (isLocked: boolean) => void;

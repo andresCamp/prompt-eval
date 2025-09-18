@@ -1,7 +1,7 @@
 "use client";
 
-import { atom } from "jotai";
-import { atomWithStorage, createJSONStorage } from "jotai/utils";
+
+import { atomWithStorage } from "jotai/utils";
 import type {
   GenerateObjectExecutionThread,
   GenerateObjectModelThread,
@@ -39,27 +39,33 @@ function getPageNamespace(): string {
   return 'root';
 }
 
-function createPageScopedStorage() {
-  return {
-    getItem: (key: string) => {
-      if (typeof window === 'undefined') return null;
-      const ns = getPageNamespace();
-      return localStorage.getItem(`snapshot:${ns}:${key}`);
-    },
-    setItem: (key: string, value: string) => {
-      if (typeof window === 'undefined') return;
-      const ns = getPageNamespace();
-      localStorage.setItem(`snapshot:${ns}:${key}`, value);
-    },
-    removeItem: (key: string) => {
-      if (typeof window === 'undefined') return;
-      const ns = getPageNamespace();
-      localStorage.removeItem(`snapshot:${ns}:${key}`);
-    },
-  };
-}
+// function createPageScopedStorage<T>() {
+//   return {
+//     getItem: (key: string): T | null => {
+//       if (typeof window === 'undefined') return null;
+//       const ns = getPageNamespace();
+//       const item = localStorage.getItem(`snapshot:${ns}:${key}`);
+//       if (!item) return null;
+//       try {
+//         return JSON.parse(item);
+//       } catch {
+//         return null;
+//       }
+//     },
+//     setItem: (key: string, value: T) => {
+//       if (typeof window === 'undefined') return;
+//       const ns = getPageNamespace();
+//       localStorage.setItem(`snapshot:${ns}:${key}`, JSON.stringify(value));
+//     },
+//     removeItem: (key: string) => {
+//       if (typeof window === 'undefined') return;
+//       const ns = getPageNamespace();
+//       localStorage.removeItem(`snapshot:${ns}:${key}`);
+//     },
+//   };
+// }
 
-const storage = createPageScopedStorage();
+
 const snapKey = (key: string) => `go-snap:${key}`;
 const modSnapKey = (key: string) => `go-mod-snap:${key}`;
 
@@ -75,7 +81,7 @@ export interface GenerateObjectSnapshot {
 
 // Per-thread snapshot with persistence
 export const snapshotAtomFamily = atomFamily((key: string) =>
-  atomWithStorage<GenerateObjectSnapshot | null>(snapKey(key), null, storage)
+  atomWithStorage<GenerateObjectSnapshot | null>(snapKey(key), null)
 );
 
 // Utility to build a snapshot from a runtime object thread
@@ -125,7 +131,7 @@ export type ModuleSnapshot =
   | { section: 'prompt'; data: PromptModuleSnapshot };
 
 export const moduleSnapshotAtomFamily = atomFamily((key: string) =>
-  atomWithStorage<ModuleSnapshot | null>(modSnapKey(key), null, storage)
+  atomWithStorage<ModuleSnapshot | null>(modSnapKey(key), null)
 );
 
 export function getModuleKey(

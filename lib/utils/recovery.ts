@@ -1,5 +1,4 @@
 import { PageScopedStorage } from '../storage';
-import type { ThreadSnapshot, CellSnapshot } from '../types/snapshot';
 import { validateSnapshot, generateSnapshotHash } from './snapshot';
 
 export interface RecoveryResult {
@@ -31,7 +30,7 @@ export class SnapshotRecovery {
     
     for (const key of keys) {
       try {
-        const rawData = this.storage.getItem(key);
+        const rawData = this.storage.getItem(key, null);
         if (!rawData) {
           result.errors.push({
             key,
@@ -41,7 +40,7 @@ export class SnapshotRecovery {
           continue;
         }
 
-        const snapshot = JSON.parse(rawData);
+        const snapshot = typeof rawData === 'string' ? JSON.parse(rawData) : rawData;
         
         if (!validateSnapshot(snapshot)) {
           const repaired = this.attemptRepair(snapshot);
@@ -75,10 +74,11 @@ export class SnapshotRecovery {
     return result;
   }
 
-  private attemptRepair(snapshot: any): any | null {
+  private attemptRepair(snapshot: unknown): unknown | null {
     try {
-      if (!snapshot.metadata) {
-        snapshot.metadata = {
+      const snap = snapshot as Record<string, unknown>;
+      if (!snap.metadata) {
+        snap.metadata = {
           id: `recovered:${Date.now()}`,
           timestamp: Date.now(),
           version: 1,
@@ -87,30 +87,30 @@ export class SnapshotRecovery {
         };
       }
 
-      if (!snapshot.metadata.hash || snapshot.metadata.hash === '') {
-        snapshot.metadata.hash = generateSnapshotHash(
-          snapshot.value || snapshot.result
+      if (!snap.metadata || !(snap.metadata as Record<string, unknown>).hash || (snap.metadata as Record<string, unknown>).hash === '') {
+        (snap.metadata as Record<string, unknown>).hash = generateSnapshotHash(
+          snap.value || snap.result
         );
       }
 
-      if (!snapshot.metadata.timestamp) {
-        snapshot.metadata.timestamp = Date.now();
+      if (!(snap.metadata as Record<string, unknown>).timestamp) {
+        (snap.metadata as Record<string, unknown>).timestamp = Date.now();
       }
 
-      if (!snapshot.metadata.version) {
-        snapshot.metadata.version = 1;
+      if (!(snap.metadata as Record<string, unknown>).version) {
+        (snap.metadata as Record<string, unknown>).version = 1;
       }
 
-      if ('value' in snapshot && !('type' in snapshot)) {
-        snapshot.type = 'unknown';
+      if ('value' in snap && !('type' in snap)) {
+        snap.type = 'unknown';
       }
 
-      if ('result' in snapshot && !('rowId' in snapshot)) {
-        snapshot.rowId = 'unknown';
-        snapshot.columnId = 'unknown';
+      if ('result' in snap && !('rowId' in snap)) {
+        snap.rowId = 'unknown';
+        snap.columnId = 'unknown';
       }
 
-      return snapshot;
+      return snap;
     } catch {
       return null;
     }
@@ -118,13 +118,13 @@ export class SnapshotRecovery {
 
   async backupSnapshots(): Promise<string> {
     const keys = this.storage.getAllKeys();
-    const backup: Record<string, any> = {};
+    const backup: Record<string, unknown> = {};
     
     for (const key of keys) {
       try {
-        const data = this.storage.getItem(key);
+        const data = this.storage.getItem(key, null);
         if (data) {
-          backup[key] = JSON.parse(data);
+          backup[key] = typeof data === 'string' ? JSON.parse(data) : data;
         }
       } catch {
         // Skip corrupted entries
@@ -199,10 +199,10 @@ export class SnapshotRecovery {
     
     for (const key of keys) {
       try {
-        const rawData = this.storage.getItem(key);
+        const rawData = this.storage.getItem(key, null);
         if (!rawData) continue;
 
-        const snapshot = JSON.parse(rawData);
+        const snapshot = typeof rawData === 'string' ? JSON.parse(rawData) : rawData;
         
         if (snapshot.metadata?.version === fromVersion) {
           const migrated = this.migrateSnapshot(snapshot, toVersion);
@@ -231,14 +231,14 @@ export class SnapshotRecovery {
     return result;
   }
 
-  private migrateSnapshot(snapshot: any, toVersion: number): any | null {
+  private migrateSnapshot(snapshot: unknown, toVersion: number): unknown | null {
     try {
-      const migrated = { ...snapshot };
+      const migrated = { ...(snapshot as Record<string, unknown>) } as Record<string, unknown>;
       
       // Add migration logic here based on version differences
       // For now, just update the version number
-      migrated.metadata.version = toVersion;
-      migrated.metadata.hash = generateSnapshotHash(
+      (migrated.metadata as Record<string, unknown>).version = toVersion;
+      (migrated.metadata as Record<string, unknown>).hash = generateSnapshotHash(
         migrated.value || migrated.result
       );
       
