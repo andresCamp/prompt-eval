@@ -68,7 +68,8 @@ export interface ImageExecutionThread {
 
 export interface ImageGenerationResult {
   success: boolean;
-  image?: string; // Base64 encoded image
+  imageId?: string; // Reference to image stored in IndexedDB
+  image?: string; // Temporary base64 for immediate display (not persisted)
   error?: string;
   duration?: number;
   requestId?: string;

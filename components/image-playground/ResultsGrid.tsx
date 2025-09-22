@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Play, Download, Lock, Unlock, X } from 'lucide-react';
+import { getImage } from '@/lib/image-storage';
 import type { ImageExecutionThread } from './types';
 import Image from 'next/image';
 import { IMAGE_PROVIDERS } from './types';
@@ -16,11 +17,21 @@ interface ImageGridProps {
   onRunAll: () => Promise<void> | void;
   anyRunning: boolean;
   showHeader?: boolean;
-  onToggleCache: (threadId: string, shouldCache: boolean, image?: string) => void;
+  onToggleCache: (threadId: string, shouldCache: boolean, imageData?: string) => void;
 }
 
-function ImagePreview({ image, onClick }: { image?: string; onClick?: () => void }) {
+function ImagePreview({ image, onClick, isGenerating }: { image?: string; onClick?: () => void; isGenerating?: boolean }) {
   if (!image) {
+    if (isGenerating) {
+      return (
+        <div className="flex h-60 w-full items-center justify-center rounded-md border border-dashed">
+          <div className="flex items-center gap-2">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span className="text-sm text-muted-foreground">Generating...</span>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="flex h-60 w-full items-center justify-center rounded-md border border-dashed text-sm text-muted-foreground">
         No image generated yet
@@ -40,9 +51,19 @@ function ImagePreview({ image, onClick }: { image?: string; onClick?: () => void
           width={512}
           height={512}
           sizes="(max-width: 768px) 100vw, 512px"
-          className="w-full h-auto object-contain"
+          className={`w-full h-auto object-contain transition-all duration-300 ${
+            isGenerating ? 'blur-sm opacity-50' : ''
+          }`}
           unoptimized
         />
+        {isGenerating && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+            <div className="bg-white/90 dark:bg-gray-800/90 rounded-lg px-4 py-2 flex items-center gap-2">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span className="text-sm font-medium">Generating...</span>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -53,24 +74,50 @@ export function ResultsGrid({ threads, onRunThread, onDownload, onRunAll, anyRun
   const [displayImages, setDisplayImages] = useState<Record<string, string>>({});
   const [lockedState, setLockedState] = useState<Record<string, boolean>>({});
   const [previewImage, setPreviewImage] = useState<{ image: string; title: string } | null>(null);
+  const [loadingImages, setLoadingImages] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    setDisplayImages(prev => {
-      const next = { ...prev };
-      threads.forEach(thread => {
+    async function loadImages() {
+      for (const thread of threads) {
         if (thread.result?.image) {
-          next[thread.id] = thread.result.image;
+          // If we have the actual image data, use it (not cached)
+          setDisplayImages(prev => ({ ...prev, [thread.id]: thread.result!.image! }));
+        } else if (thread.result?.imageId && !displayImages[thread.id] && !loadingImages.has(thread.id)) {
+          // If we only have an imageId, load it from IndexedDB (cached)
+          setLoadingImages(prev => new Set(prev).add(thread.id));
+          try {
+            const imageData = await getImage(thread.result.imageId);
+            if (imageData) {
+              setDisplayImages(prev => ({ ...prev, [thread.id]: imageData }));
+            }
+          } catch (error) {
+            console.error('Failed to load image from IndexedDB:', error);
+          } finally {
+            setLoadingImages(prev => {
+              const next = new Set(prev);
+              next.delete(thread.id);
+              return next;
+            });
+          }
+        } else if (!thread.result?.image && !thread.result?.imageId) {
+          // No image data and no imageId - clear display
+          setDisplayImages(prev => {
+            const next = { ...prev };
+            delete next[thread.id];
+            return next;
+          });
         }
-      });
-      return next;
-    });
+      }
+    }
+    void loadImages();
   }, [threads]);
 
   useEffect(() => {
     setLockedState(() => {
       const next: Record<string, boolean> = {};
       threads.forEach(thread => {
-        if (thread.result?.image) {
+        // Only show as locked if it has an imageId (cached in IndexedDB)
+        if (thread.result?.imageId) {
           next[thread.id] = true;
         }
       });
@@ -88,16 +135,18 @@ export function ResultsGrid({ threads, onRunThread, onDownload, onRunAll, anyRun
 
   const handleCacheToggle = (thread: ImageExecutionThread, isLocked: boolean) => {
     if (isLocked) {
+      // Turning cache OFF
       setLockedState(prev => ({ ...prev, [thread.id]: false }));
       onToggleCache(thread.id, false);
       return;
     }
 
-    const image = displayImages[thread.id] ?? thread.result?.image;
-    if (!image) return;
+    // Turning cache ON - need to pass the current image data
+    const imageData = displayImages[thread.id];
+    if (!imageData) return;
 
     setLockedState(prev => ({ ...prev, [thread.id]: true }));
-    onToggleCache(thread.id, true, image);
+    onToggleCache(thread.id, true, imageData);
   };
 
   return (
@@ -118,8 +167,9 @@ export function ResultsGrid({ threads, onRunThread, onDownload, onRunAll, anyRun
         {visibleThreads.map(thread => {
           const result = thread.result;
           const providerLabel = IMAGE_PROVIDERS.find(p => p.value === thread.promptThread.provider)?.label ?? thread.promptThread.provider;
-          const effectiveImage = displayImages[thread.id] ?? result?.image;
+          const effectiveImage = displayImages[thread.id];
           const isLocked = lockedState[thread.id] ?? false;
+          const isLoadingImage = loadingImages.has(thread.id);
 
           return (
             <Card key={thread.id} className="flex flex-col">
@@ -169,14 +219,21 @@ export function ResultsGrid({ threads, onRunThread, onDownload, onRunAll, anyRun
                 </div>
               </CardHeader>
               <CardContent className="flex-1 space-y-3">
-                <ImagePreview
-                  image={effectiveImage}
-                  onClick={() => {
-                    if (effectiveImage) {
-                      setPreviewImage({ image: effectiveImage, title: thread.name });
-                    }
-                  }}
-                />
+                {isLoadingImage ? (
+                  <div className="flex h-60 w-full items-center justify-center rounded-md border border-dashed">
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                  </div>
+                ) : (
+                  <ImagePreview
+                    image={effectiveImage}
+                    isGenerating={thread.isRunning}
+                    onClick={() => {
+                      if (effectiveImage && !thread.isRunning) {
+                        setPreviewImage({ image: effectiveImage, title: thread.name });
+                      }
+                    }}
+                  />
+                )}
                 {result && (
                   <div className="text-xs text-muted-foreground space-y-1">
                     <p>Status: {result.success ? 'Success' : 'Failed'}</p>
@@ -196,10 +253,10 @@ export function ResultsGrid({ threads, onRunThread, onDownload, onRunAll, anyRun
                   type="button"
                   size="sm"
                   variant="ghost"
-                  disabled={!result?.image}
+                  disabled={!effectiveImage}
                   onClick={() => {
-                    if (result?.image) {
-                      onDownload(result.image, `${thread.name.replace(/\s+/g, '-')}.png`);
+                    if (effectiveImage) {
+                      onDownload(effectiveImage, `${thread.name.replace(/\s+/g, '-')}.png`);
                     }
                   }}
                 >

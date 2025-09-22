@@ -113,6 +113,8 @@ export async function runImageExecution(thread: ImageExecutionThread): Promise<I
         error: data.error || `HTTP ${response.status}`
       };
     }
+
+    // Return the image data as-is (will be saved to IndexedDB only if cached)
     return data;
   } catch (error) {
     return {
