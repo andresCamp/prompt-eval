@@ -7,6 +7,11 @@ import type { SyncStorage } from 'jotai/vanilla/utils/atomWithStorage';
 // Custom storage that strips image data before persisting
 const imageConfigStorage: SyncStorage<ImageGenerationConfig> = {
   getItem: (key: string, initialValue: ImageGenerationConfig) => {
+    // Check if we're on the client side
+    if (typeof window === 'undefined' || !window.localStorage) {
+      return initialValue;
+    }
+
     const storedValue = localStorage.getItem(key);
     if (!storedValue) return initialValue;
 
@@ -17,6 +22,11 @@ const imageConfigStorage: SyncStorage<ImageGenerationConfig> = {
     }
   },
   setItem: (key: string, value: ImageGenerationConfig) => {
+    // Check if we're on the client side
+    if (typeof window === 'undefined' || !window.localStorage) {
+      return;
+    }
+
     // Strip out base64 image data before persisting (keep only imageIds)
     const valueForStorage = {
       ...value,
@@ -31,6 +41,10 @@ const imageConfigStorage: SyncStorage<ImageGenerationConfig> = {
     localStorage.setItem(key, JSON.stringify(valueForStorage));
   },
   removeItem: (key: string) => {
+    // Check if we're on the client side
+    if (typeof window === 'undefined' || !window.localStorage) {
+      return;
+    }
     localStorage.removeItem(key);
   }
 };

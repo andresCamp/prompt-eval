@@ -11,16 +11,17 @@ export function buildExecutionThreads(
 ): ImageExecutionThread[] {
   const newThreads: ImageExecutionThread[] = [];
 
-  prompts.filter(prompt => prompt.visible).forEach(prompt => {
+  // Process ALL prompts, not just visible ones, to preserve cached images
+  prompts.forEach(prompt => {
     const name = prompt.name;
     const existing = previous.find(thread => thread.promptThread?.id === prompt.id);
     newThreads.push({
       id: existing?.id ?? generateId(),
       name,
       promptThread: prompt,
-      visible: existing?.visible ?? prompt.visible,
+      visible: prompt.visible, // Use the prompt's current visibility
       isRunning: existing?.isRunning ?? false,
-      result: existing?.result
+      result: existing?.result // Preserve the result (including cached images)
     });
   });
 

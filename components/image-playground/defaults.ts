@@ -18,7 +18,7 @@ function createPromptThread(options: {
   provider: ImageProvider;
   prompt: string;
   mode?: ReveMode;
-  referenceImages?: string[];
+  referenceImageIds?: string[];
   aspectRatio?: AspectRatio;
   version?: string;
 }): ImagePromptThread {
@@ -28,7 +28,7 @@ function createPromptThread(options: {
     provider: options.provider,
     prompt: options.prompt,
     mode: options.mode,
-    referenceImages: options.referenceImages,
+    referenceImageIds: options.referenceImageIds,
     aspectRatio: options.aspectRatio,
     version: options.version,
     visible: true

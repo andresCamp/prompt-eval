@@ -52,18 +52,10 @@ function ImagePreview({ image, onClick, isGenerating }: { image?: string; onClic
           height={512}
           sizes="(max-width: 768px) 100vw, 512px"
           className={`w-full h-auto object-contain transition-all duration-300 ${
-            isGenerating ? 'blur-sm opacity-50' : ''
+            isGenerating ? 'blur-sm' : ''
           }`}
           unoptimized
         />
-        {isGenerating && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-            <div className="bg-white/90 dark:bg-gray-800/90 rounded-lg px-4 py-2 flex items-center gap-2">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <span className="text-sm font-medium">Generating...</span>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

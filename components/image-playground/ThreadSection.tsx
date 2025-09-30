@@ -18,6 +18,7 @@ import {
 import { ImageUpload } from './ImageUpload';
 import { getRequiredImages } from './types';
 import { generateId } from '@/components/prompt-playground/shared/utils';
+import { releaseImage } from '@/lib/image-storage';
 
 interface BaseThread {
   id: string;
@@ -191,7 +192,7 @@ export function PromptThreadSection({
       name: `Prompt ${threads.length + 1}`,
       provider: 'google',
       prompt: '',
-      referenceImages: [],
+      referenceImageIds: [],
       visible: true
     };
     onThreadsChange([...threads, newThread]);
@@ -208,8 +209,19 @@ export function PromptThreadSection({
     onThreadsChange([...threads, copy]);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (threads.length <= 1) return;
+    const threadToDelete = threads.find(t => t.id === id);
+    if (threadToDelete?.referenceImageIds) {
+      // Release all reference images for this thread
+      for (const imageId of threadToDelete.referenceImageIds) {
+        try {
+          await releaseImage(imageId);
+        } catch (error) {
+          console.error('Failed to release reference image:', error);
+        }
+      }
+    }
     onThreadsChange(threads.filter(thread => thread.id !== id));
   };
 
@@ -226,10 +238,10 @@ export function PromptThreadSection({
     >
       {(thread, onUpdate) => {
         const required = getRequiredImages(thread.provider, thread.mode);
-        const images = thread.referenceImages || [];
+        const imageIds = thread.referenceImageIds || [];
 
-        const handleImagesChange = (newImages: string[]) => {
-          onUpdate({ referenceImages: newImages });
+        const handleImageIdsChange = (newImageIds: string[]) => {
+          onUpdate({ referenceImageIds: newImageIds });
         };
 
         const handleProviderChange = (nextProvider: ImageProvider) => {
@@ -246,7 +258,7 @@ export function PromptThreadSection({
           }
 
           if (nextProvider === 'google') {
-            baseUpdates.referenceImages = images.slice(0, 1);
+            baseUpdates.referenceImageIds = imageIds.slice(0, 1);
           }
 
           onUpdate(baseUpdates);
@@ -291,10 +303,10 @@ export function PromptThreadSection({
               </Button>
             </div>
             <ImageUpload
-              images={images}
+              imageIds={imageIds}
               maxImages={required.max}
               required={required.min > 0}
-              onImagesChange={handleImagesChange}
+              onImageIdsChange={handleImageIdsChange}
               disabled={thread.provider === 'reve' && thread.mode === 'create'}
             />
             <p className="text-xs text-muted-foreground">
