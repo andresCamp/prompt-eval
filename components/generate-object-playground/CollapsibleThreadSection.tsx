@@ -5,7 +5,7 @@
 
 'use client';
 
-import React, { ReactNode, useState } from 'react';
+import React, { ReactNode, useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -19,6 +19,8 @@ import {
   PromptDataThread,
 } from './types';
 import { PROVIDERS } from '@/lib/llm-providers';
+import { detectVariables, getVariableDefaults } from './utils';
+import { VariableInputs } from './VariableInputs';
 
 // Get all models that support object generation
 const getObjectGenerationModels = () => {
@@ -341,15 +343,34 @@ export function SystemPromptThreadSection({
       onDuplicateThread={onDuplicateThread}
       copiedStates={copiedStates}
       onCopy={onCopy}
-      renderContent={(thread, onUpdate) => (
-        <Textarea
-          value={thread.prompt}
-          onChange={(e) => onUpdate({ prompt: e.target.value })}
-          placeholder="Enter system prompt..."
-          className="text-sm h-32"
-          onClick={(e) => e.stopPropagation()}
-        />
-      )}
+      renderContent={(thread, onUpdate) => {
+        const detectedVariables = useMemo(
+          () => detectVariables(thread.prompt),
+          [thread.prompt]
+        );
+
+        return (
+          <div className="space-y-3">
+            <Textarea
+              value={thread.prompt}
+              onChange={(e) => {
+                const newPrompt = e.target.value;
+                const newVariables = detectVariables(newPrompt);
+                const updatedVariables = getVariableDefaults(newVariables, thread.variables);
+                onUpdate({ prompt: newPrompt, variables: updatedVariables });
+              }}
+              placeholder="Enter system prompt..."
+              className="text-sm h-32"
+              onClick={(e) => e.stopPropagation()}
+            />
+            <VariableInputs
+              variableNames={detectedVariables}
+              variables={thread.variables}
+              onVariableChange={(variables) => onUpdate({ variables })}
+            />
+          </div>
+        );
+      }}
     />
   );
 }
@@ -384,15 +405,34 @@ export function PromptDataThreadSection({
       onDuplicateThread={onDuplicateThread}
       copiedStates={copiedStates}
       onCopy={onCopy}
-      renderContent={(thread, onUpdate) => (
-        <Textarea
-          value={thread.prompt}
-          onChange={(e) => onUpdate({ prompt: e.target.value })}
-          placeholder="Enter prompt or JSON data..."
-          className="font-mono text-xs h-40"
-          onClick={(e) => e.stopPropagation()}
-        />
-      )}
+      renderContent={(thread, onUpdate) => {
+        const detectedVariables = useMemo(
+          () => detectVariables(thread.prompt),
+          [thread.prompt]
+        );
+
+        return (
+          <div className="space-y-3">
+            <Textarea
+              value={thread.prompt}
+              onChange={(e) => {
+                const newPrompt = e.target.value;
+                const newVariables = detectVariables(newPrompt);
+                const updatedVariables = getVariableDefaults(newVariables, thread.variables);
+                onUpdate({ prompt: newPrompt, variables: updatedVariables });
+              }}
+              placeholder="Enter prompt or JSON data..."
+              className="font-mono text-xs h-40"
+              onClick={(e) => e.stopPropagation()}
+            />
+            <VariableInputs
+              variableNames={detectedVariables}
+              variables={thread.variables}
+              onVariableChange={(variables) => onUpdate({ variables })}
+            />
+          </div>
+        );
+      }}
     />
   );
 }

@@ -41,6 +41,7 @@ import {
 } from '@/components/generate-object-playground/CollapsibleThreadSection';
 import { ResultsGrid } from '@/components/generate-object-playground/ResultsGrid';
 import { generateId } from '@/components/prompt-playground/shared/utils';
+import { replaceVariables } from '@/components/generate-object-playground/utils';
 // Module hydration uses localStorage directly (no hooks needed here)
 
 // Default values
@@ -493,8 +494,19 @@ export default function GenerateObjectPlaygroundPage({
     }));
 
     try {
+      // Replace variables in system prompt and prompt data
+      const processedSystemPrompt = replaceVariables(
+        thread.systemPromptThread.prompt,
+        thread.systemPromptThread.variables
+      );
+
+      const processedPromptData = replaceVariables(
+        thread.promptDataThread.prompt,
+        thread.promptDataThread.variables
+      );
+
       // Ensure prompt is a string - stringify if it's JSON
-      let promptString = thread.promptDataThread.prompt;
+      let promptString = processedPromptData;
       try {
         // Check if prompt is already valid JSON string
         JSON.parse(promptString);
@@ -515,7 +527,7 @@ export default function GenerateObjectPlaygroundPage({
           model: thread.modelThread.model,
           provider: thread.modelThread.provider,
           schema: thread.schemaThread.schema,
-          system: thread.systemPromptThread.prompt,
+          system: processedSystemPrompt,
           prompt: promptString
         }),
       });

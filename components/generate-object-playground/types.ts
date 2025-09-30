@@ -15,6 +15,7 @@ export interface SystemPromptThread {
   id: string;
   name: string;
   prompt: string; // System prompt to guide the transformation
+  variables?: Record<string, string>; // Variable values for ${variable} placeholders
   visible: boolean;
 }
 
@@ -22,6 +23,7 @@ export interface PromptDataThread {
   id: string;
   name: string;
   prompt: string; // The prompt (can be JSON data or text)
+  variables?: Record<string, string>; // Variable values for ${variable} placeholders
   visible: boolean;
 }
 
