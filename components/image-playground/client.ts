@@ -7,6 +7,7 @@ import {
   ReveRemixRequest,
   getRequiredImages
 } from './types';
+import { getImage } from '@/lib/image-storage';
 
 function extractDataUrl(image?: string): { data?: string; mimeType?: string } {
   if (!image) {
@@ -25,17 +26,23 @@ function extractDataUrl(image?: string): { data?: string; mimeType?: string } {
   };
 }
 
-function buildGooglePayload(thread: ImageExecutionThread): GoogleImageRequest {
+async function buildGooglePayload(thread: ImageExecutionThread): Promise<GoogleImageRequest> {
   const { promptThread } = thread;
-  const { data, mimeType } = extractDataUrl(promptThread.referenceImages?.[0]);
+  let referenceImage: string | undefined;
+
+  if (promptThread.referenceImageIds?.[0]) {
+    const imageData = await getImage(promptThread.referenceImageIds[0]);
+    referenceImage = imageData || undefined;
+  }
+
   return {
     prompt: promptThread.prompt,
-    referenceImage: data,
-    referenceImageMimeType: mimeType
+    referenceImage,
+    referenceImageMimeType: referenceImage ? 'image/png' : undefined
   };
 }
 
-function buildRevePayload(thread: ImageExecutionThread) {
+async function buildRevePayload(thread: ImageExecutionThread) {
   const { promptThread } = thread;
   const payloadBase = {
     aspect_ratio: promptThread.aspectRatio,
@@ -44,20 +51,34 @@ function buildRevePayload(thread: ImageExecutionThread) {
 
   switch (promptThread.mode) {
     case 'remix': {
+      const referenceImages: string[] = [];
+      if (promptThread.referenceImageIds) {
+        for (const imageId of promptThread.referenceImageIds) {
+          const imageData = await getImage(imageId);
+          if (imageData) {
+            referenceImages.push(imageData);
+          }
+        }
+      }
+
       const body: ReveRemixRequest = {
         prompt: promptThread.prompt,
-        reference_images: (promptThread.referenceImages || [])
-          .map(image => extractDataUrl(image).data)
-          .filter(Boolean) as string[],
+        reference_images: referenceImages,
         aspect_ratio: payloadBase.aspect_ratio,
         version: payloadBase.version
       };
       return { endpoint: '/api/image/reve/remix', body };
     }
     case 'edit': {
+      let referenceImage = '';
+      if (promptThread.referenceImageIds?.[0]) {
+        const imageData = await getImage(promptThread.referenceImageIds[0]);
+        referenceImage = imageData || '';
+      }
+
       const body: ReveEditRequest = {
         edit_instruction: promptThread.prompt,
-        reference_image: extractDataUrl(promptThread.referenceImages?.[0]).data ?? '',
+        reference_image: referenceImage,
         version: payloadBase.version
       };
       return { endpoint: '/api/image/reve/edit', body };
@@ -80,7 +101,7 @@ export async function runImageExecution(thread: ImageExecutionThread): Promise<I
   let body: unknown;
 
   const requiredImages = getRequiredImages(provider, thread.promptThread.mode);
-  const providedImages = thread.promptThread.referenceImages?.filter(Boolean) ?? [];
+  const providedImages = thread.promptThread.referenceImageIds?.filter(Boolean) ?? [];
   if (providedImages.length < requiredImages.min || providedImages.length > requiredImages.max) {
     return {
       success: false,
@@ -90,9 +111,9 @@ export async function runImageExecution(thread: ImageExecutionThread): Promise<I
 
   if (provider === 'google') {
     endpoint = '/api/image/google';
-    body = buildGooglePayload(thread);
+    body = await buildGooglePayload(thread);
   } else {
-    const config = buildRevePayload(thread);
+    const config = await buildRevePayload(thread);
     endpoint = config.endpoint;
     body = config.body;
   }
@@ -113,6 +134,8 @@ export async function runImageExecution(thread: ImageExecutionThread): Promise<I
         error: data.error || `HTTP ${response.status}`
       };
     }
+
+    // Return the image data as-is (will be saved to IndexedDB only if cached)
     return data;
   } catch (error) {
     return {

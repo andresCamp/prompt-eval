@@ -41,6 +41,7 @@ import {
 } from '@/components/generate-object-playground/CollapsibleThreadSection';
 import { ResultsGrid } from '@/components/generate-object-playground/ResultsGrid';
 import { generateId } from '@/components/prompt-playground/shared/utils';
+import { replaceVariables } from '@/components/generate-object-playground/utils';
 // Module hydration uses localStorage directly (no hooks needed here)
 
 // Default values
@@ -62,34 +63,40 @@ const DEFAULT_PROMPT = `{
   "available": true
 }`;
 
-export default function GenerateObjectPlaygroundPage({ 
-  params 
-}: { 
-  params: Promise<{ chatId: string }> 
+export default function GenerateObjectPlaygroundPage({
+  params
+}: {
+  params: Promise<{ chatId: string }>
 }) {
-  // Unwrap the params Promise
+  // Unwrap the params Promise - MUST be first
   const { chatId } = use(params);
-  
-  // Set per-page namespace for storage keys (scoped to object/[chatId])
-  if (typeof window !== 'undefined') {
-    (window as unknown as { __PAGE_NS__?: string }).__PAGE_NS__ = `@object-chat-${chatId}`;
-  }
-  
+
+  // All hooks MUST be declared before any conditional logic or returns
   const [mounted, setMounted] = useState(false);
-  
+
+  // Copy management
+  const [copiedStates, setCopiedStates] = useState<Record<string, boolean>>({});
+
   // Chat-specific config atom - unique per chatId
   const configAtom = configAtomFamily(chatId);
   const [config, setConfig] = useAtom(configAtom);
-  
+
+  // Set per-page namespace for storage keys (scoped to object/[chatId])
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      (window as unknown as { __PAGE_NS__?: string }).__PAGE_NS__ = `@object-chat-${chatId}`;
+    }
+  }, [chatId]);
+
   // Wait for client mount to avoid hydration issues
   useEffect(() => {
     setMounted(true);
   }, []);
-  
+
   // Set defaults if config is empty
   useEffect(() => {
     if (!mounted) return;
-    
+
     if (config.modelThreads.length === 0) {
       console.log('🏗️ Setting default config');
       setConfig({
@@ -301,9 +308,6 @@ export default function GenerateObjectPlaygroundPage({
     setConfig(prev => prev ? ({ ...prev, ...updates }) : prev);
   };
 
-  // Copy management
-  const [copiedStates, setCopiedStates] = useState<Record<string, boolean>>({});
-
   const handleCopy = async (text: string, key: string) => {
     try {
       await navigator.clipboard.writeText(text);
@@ -493,8 +497,19 @@ export default function GenerateObjectPlaygroundPage({
     }));
 
     try {
+      // Replace variables in system prompt and prompt data
+      const processedSystemPrompt = replaceVariables(
+        thread.systemPromptThread.prompt,
+        thread.systemPromptThread.variables
+      );
+
+      const processedPromptData = replaceVariables(
+        thread.promptDataThread.prompt,
+        thread.promptDataThread.variables
+      );
+
       // Ensure prompt is a string - stringify if it's JSON
-      let promptString = thread.promptDataThread.prompt;
+      let promptString = processedPromptData;
       try {
         // Check if prompt is already valid JSON string
         JSON.parse(promptString);
@@ -515,7 +530,7 @@ export default function GenerateObjectPlaygroundPage({
           model: thread.modelThread.model,
           provider: thread.modelThread.provider,
           schema: thread.schemaThread.schema,
-          system: thread.systemPromptThread.prompt,
+          system: processedSystemPrompt,
           prompt: promptString
         }),
       });

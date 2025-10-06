@@ -13,6 +13,7 @@ import { useAtom } from 'jotai';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { imageConfigAtomFamily } from '@/lib/atoms/image-playground';
+import { clearOldImages, saveImage, deleteImage, getImage } from '@/lib/image-storage';
 import { PromptThreadSection } from '@/components/image-playground/ThreadSection';
 import { ResultsGrid } from '@/components/image-playground/ResultsGrid';
 import { runImageExecution } from '@/components/image-playground/client';
@@ -46,6 +47,9 @@ export default function ImagePlaygroundPage({ params }: { params: ParamsPromise 
 
   useEffect(() => {
     setMounted(true);
+
+    // Clean up old images on mount (images older than 7 days)
+    void clearOldImages(7 * 24 * 60 * 60 * 1000);
   }, []);
 
   useEffect(() => {
@@ -100,10 +104,34 @@ export default function ImagePlaygroundPage({ params }: { params: ParamsPromise 
     const thread = config.executionThreads.find(t => t.id === threadId);
     if (!thread) return;
 
-    updateExecution(threadId, { isRunning: true, result: undefined });
+    // Keep the old result while generating (don't clear it)
+    const oldResult = thread.result;
+    const hadCachedImage = oldResult?.imageId;
+
+    // Just mark as running, keep the existing result for display
+    updateExecution(threadId, { isRunning: true });
+
     try {
       const result = await runImageExecution(thread);
-      updateExecution(threadId, { isRunning: false, result });
+
+      // If there was a cached image, delete it from IndexedDB now that we have a new one
+      if (hadCachedImage) {
+        try {
+          await deleteImage(hadCachedImage);
+        } catch (error) {
+          console.error('Failed to delete old cached image:', error);
+        }
+      }
+
+      // The new image is not cached by default - just store temporarily with the image data
+      updateExecution(threadId, {
+        isRunning: false,
+        result: {
+          ...result,
+          imageId: undefined, // No imageId means not cached
+          image: result.image // Keep the image data for display
+        }
+      });
     } catch (error) {
       console.error('Image execution failed', error);
       updateExecution(threadId, {
@@ -134,22 +162,71 @@ export default function ImagePlaygroundPage({ params }: { params: ParamsPromise 
     document.body.removeChild(link);
   };
 
-  const handleToggleCache = (threadId: string, shouldCache: boolean, image?: string) => {
-    setConfig(prev => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        executionThreads: prev.executionThreads.map(thread => {
-          if (thread.id !== threadId || !thread.result) {
-            return thread;
+  const handleToggleCache = async (threadId: string, shouldCache: boolean, imageData?: string) => {
+    const thread = config.executionThreads.find(t => t.id === threadId);
+    if (!thread || !thread.result) return;
+
+    if (shouldCache) {
+      // Cache ON: Save image to IndexedDB
+      if (imageData || thread.result.image) {
+        try {
+          const imageToSave = imageData || thread.result.image;
+          if (imageToSave) {
+            const imageId = await saveImage(imageToSave);
+            // Update config with imageId, keeping image for current display
+            setConfig(prev => {
+              if (!prev) return prev;
+              return {
+                ...prev,
+                executionThreads: prev.executionThreads.map(t => {
+                  if (t.id !== threadId || !t.result) return t;
+                  return {
+                    ...t,
+                    result: {
+                      ...t.result,
+                      imageId,
+                      image: t.result.image // Keep the image data for current display
+                    }
+                  };
+                })
+              };
+            });
           }
-          const nextResult = shouldCache
-            ? { ...thread.result, image: image ?? thread.result.image }
-            : { ...thread.result, image: undefined };
-          return { ...thread, result: nextResult };
-        })
-      };
-    });
+        } catch (error) {
+          console.error('Failed to cache image:', error);
+        }
+      }
+    } else {
+      // Cache OFF: Remove image from IndexedDB but keep displaying it
+      if (thread.result.imageId) {
+        try {
+          await deleteImage(thread.result.imageId);
+          // Get the image from IndexedDB before deleting to keep it in memory
+          const currentImage = imageData || (await getImage(thread.result.imageId));
+
+          // Update config to remove imageId but keep the image for current display
+          setConfig(prev => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              executionThreads: prev.executionThreads.map(t => {
+                if (t.id !== threadId || !t.result) return t;
+                return {
+                  ...t,
+                  result: {
+                    ...t.result,
+                    imageId: undefined, // Remove cache reference
+                    image: currentImage || t.result.image // Keep image for display
+                  }
+                };
+              })
+            };
+          });
+        } catch (error) {
+          console.error('Failed to remove cached image:', error);
+        }
+      }
+    }
   };
 
   if (!config || !mounted) {

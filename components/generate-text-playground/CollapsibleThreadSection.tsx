@@ -5,7 +5,7 @@
 
 'use client';
 
-import React, { ReactNode, useState } from 'react';
+import React, { ReactNode, useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -18,6 +18,8 @@ import {
   PromptDataThread,
 } from './types';
 import { PROVIDERS } from '@/lib/llm-providers';
+import { detectVariables, getVariableDefaults } from '@/components/generate-object-playground/utils';
+import { VariableInputs } from '@/components/generate-object-playground/VariableInputs';
 
 // Get all models that support text generation (assume all language models do)
 const getTextGenerationModels = () => {
@@ -258,6 +260,42 @@ export function TextModelThreadSection({
   );
 }
 
+// System Prompt content component - separate to handle hooks properly
+function SystemPromptContent({
+  thread,
+  onUpdate
+}: {
+  thread: SystemPromptThread;
+  onUpdate: (updates: Partial<SystemPromptThread>) => void
+}) {
+  const detectedVariables = useMemo(
+    () => detectVariables(thread.prompt),
+    [thread.prompt]
+  );
+
+  return (
+    <div className="space-y-3">
+      <Textarea
+        value={thread.prompt}
+        onChange={(e) => {
+          const newPrompt = e.target.value;
+          const newVariables = detectVariables(newPrompt);
+          const updatedVariables = getVariableDefaults(newVariables, thread.variables);
+          onUpdate({ prompt: newPrompt, variables: updatedVariables });
+        }}
+        placeholder="Enter system prompt..."
+        className="text-sm h-32"
+        onClick={(e) => e.stopPropagation()}
+      />
+      <VariableInputs
+        variableNames={detectedVariables}
+        variables={thread.variables}
+        onVariableChange={(variables) => onUpdate({ variables })}
+      />
+    </div>
+  );
+}
+
 // System Prompt Thread Section
 export function TextSystemPromptThreadSection({
   threads,
@@ -289,15 +327,45 @@ export function TextSystemPromptThreadSection({
       copiedStates={copiedStates}
       onCopy={onCopy}
       renderContent={(thread, onUpdate) => (
-        <Textarea
-          value={thread.prompt}
-          onChange={(e) => onUpdate({ prompt: e.target.value })}
-          placeholder="Enter system prompt..."
-          className="text-sm h-32"
-          onClick={(e) => e.stopPropagation()}
-        />
+        <SystemPromptContent thread={thread} onUpdate={onUpdate} />
       )}
     />
+  );
+}
+
+// Prompt Data content component - separate to handle hooks properly
+function PromptDataContent({
+  thread,
+  onUpdate
+}: {
+  thread: PromptDataThread;
+  onUpdate: (updates: Partial<PromptDataThread>) => void
+}) {
+  const detectedVariables = useMemo(
+    () => detectVariables(thread.prompt),
+    [thread.prompt]
+  );
+
+  return (
+    <div className="space-y-3">
+      <Textarea
+        value={thread.prompt}
+        onChange={(e) => {
+          const newPrompt = e.target.value;
+          const newVariables = detectVariables(newPrompt);
+          const updatedVariables = getVariableDefaults(newVariables, thread.variables);
+          onUpdate({ prompt: newPrompt, variables: updatedVariables });
+        }}
+        placeholder="Enter user prompt..."
+        className="text-sm h-32"
+        onClick={(e) => e.stopPropagation()}
+      />
+      <VariableInputs
+        variableNames={detectedVariables}
+        variables={thread.variables}
+        onVariableChange={(variables) => onUpdate({ variables })}
+      />
+    </div>
   );
 }
 
@@ -332,13 +400,7 @@ export function TextPromptDataThreadSection({
       copiedStates={copiedStates}
       onCopy={onCopy}
       renderContent={(thread, onUpdate) => (
-        <Textarea
-          value={thread.prompt}
-          onChange={(e) => onUpdate({ prompt: e.target.value })}
-          placeholder="Enter user prompt..."
-          className="text-sm h-32"
-          onClick={(e) => e.stopPropagation()}
-        />
+        <PromptDataContent thread={thread} onUpdate={onUpdate} />
       )}
     />
   );

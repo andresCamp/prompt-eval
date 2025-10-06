@@ -15,6 +15,7 @@ export interface SystemPromptThread {
   id: string;
   name: string;
   prompt: string; // System prompt to guide the text generation
+  variables?: Record<string, string>; // Variable values for ${variable} placeholders
   visible: boolean;
 }
 
@@ -22,6 +23,7 @@ export interface PromptDataThread {
   id: string;
   name: string;
   prompt: string; // The input prompt for text generation
+  variables?: Record<string, string>; // Variable values for ${variable} placeholders
   visible: boolean;
 }
 

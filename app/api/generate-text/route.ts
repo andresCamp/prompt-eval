@@ -3,6 +3,7 @@ import { anthropic } from '@ai-sdk/anthropic';
 import { google } from '@ai-sdk/google';
 import { groq } from '@ai-sdk/groq';
 import { xai } from '@ai-sdk/xai';
+import { perplexity } from '@ai-sdk/perplexity';
 import { generateText } from 'ai';
 import { NextResponse } from 'next/server';
 
@@ -13,6 +14,7 @@ const providers = {
   google,
   groq,
   xai,
+  perplexity,
 } as const;
 
 type Provider = keyof typeof providers;

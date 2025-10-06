@@ -45,8 +45,8 @@ export interface ImagePromptThread {
   prompt: string;
   // For REVE, mode determines which API endpoint to use
   mode?: ReveMode;
-  // Reference images (base64 encoded)
-  referenceImages?: string[];
+  // Reference images (IDs to images stored in IndexedDB)
+  referenceImageIds?: string[];
   aspectRatio?: AspectRatio;
   format?: ImageFormat;
   version?: string;
@@ -68,7 +68,8 @@ export interface ImageExecutionThread {
 
 export interface ImageGenerationResult {
   success: boolean;
-  image?: string; // Base64 encoded image
+  imageId?: string; // Reference to image stored in IndexedDB
+  image?: string; // Temporary base64 for immediate display (not persisted)
   error?: string;
   duration?: number;
   requestId?: string;
@@ -121,9 +122,9 @@ export interface ImageGenerationConfig {
 // ---------------------------------------------
 
 export interface ImageUploadProps {
-  images: string[];
+  imageIds: string[]; // IDs of images stored in IndexedDB
   maxImages: number;
-  onImagesChange: (images: string[]) => void;
+  onImageIdsChange: (imageIds: string[]) => void;
   disabled?: boolean;
   required?: boolean;
 }

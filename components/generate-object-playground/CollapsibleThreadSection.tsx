@@ -5,12 +5,12 @@
 
 'use client';
 
-import React, { ReactNode, useState } from 'react';
+import React, { ReactNode, useState, useMemo, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Copy, Trash2, Brain, Code, Cpu, FileJson, Eye, EyeOff, ChevronDown } from 'lucide-react';
+import { Plus, Copy, Trash2, Brain, Code, Cpu, FileJson, Eye, EyeOff, ChevronDown, Sparkles, Loader2, Undo2 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   GenerateObjectModelThread,
@@ -19,6 +19,8 @@ import {
   PromptDataThread,
 } from './types';
 import { PROVIDERS } from '@/lib/llm-providers';
+import { detectVariables, getVariableDefaults } from './utils';
+import { VariableInputs } from './VariableInputs';
 
 // Get all models that support object generation
 const getObjectGenerationModels = () => {
@@ -259,7 +261,154 @@ export function ModelThreadSection({
   );
 }
 
-// Schema Thread Section  
+// Schema content component - separate to handle hooks properly
+function SchemaContent({
+  thread,
+  onUpdate
+}: {
+  thread: SchemaThread;
+  onUpdate: (updates: Partial<SchemaThread>) => void
+}) {
+  const [isNormalizing, setIsNormalizing] = useState(false);
+  const [originalSchema, setOriginalSchema] = useState<string | null>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
+
+  // Test schema validity when it changes
+  useEffect(() => {
+    if (!thread.schema.trim()) {
+      setValidationError(null);
+      return;
+    }
+
+    try {
+      const testFunction = new Function('z', `return ${thread.schema}`);
+      // Syntax is valid
+      setValidationError(null);
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Invalid schema syntax';
+      setValidationError(errorMsg);
+    }
+  }, [thread.schema]);
+
+  // Auto-normalize on validation error (debounced)
+  useEffect(() => {
+    if (!validationError || isNormalizing || originalSchema) return;
+
+    const timer = setTimeout(() => {
+      handleNormalize(true);
+    }, 500);
+
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [validationError, isNormalizing, originalSchema]);
+
+  const handleNormalize = async (isAutomatic = false) => {
+    if (!thread.schema.trim()) return;
+
+    // Store original schema for undo
+    if (!originalSchema && !isAutomatic) {
+      setOriginalSchema(thread.schema);
+    } else if (!originalSchema && isAutomatic) {
+      setOriginalSchema(thread.schema);
+    }
+
+    setIsNormalizing(true);
+    try {
+      const response = await fetch('/api/normalize-schema', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ schema: thread.schema }),
+      });
+
+      const data = await response.json();
+      if (data.success && data.normalizedSchema) {
+        onUpdate({ schema: data.normalizedSchema });
+        if (!isAutomatic) {
+          setOriginalSchema(thread.schema);
+        }
+      } else {
+        console.error('Normalization failed:', data.error);
+        // Clear original on failure
+        setOriginalSchema(null);
+      }
+    } catch (error) {
+      console.error('Error normalizing schema:', error);
+      setOriginalSchema(null);
+    } finally {
+      setIsNormalizing(false);
+    }
+  };
+
+  const handleUndo = () => {
+    if (originalSchema) {
+      onUpdate({ schema: originalSchema });
+      setOriginalSchema(null);
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="relative">
+        <Textarea
+          value={thread.schema}
+          onChange={(e) => {
+            onUpdate({ schema: e.target.value });
+            // Clear original when user manually edits after normalization
+            if (originalSchema) {
+              setOriginalSchema(null);
+            }
+          }}
+          placeholder="Enter Zod schema..."
+          className="font-mono text-xs h-40 pr-20"
+          onClick={(e) => e.stopPropagation()}
+        />
+        <Button
+          size="sm"
+          variant="outline"
+          className="absolute top-2 right-2"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (originalSchema) {
+              handleUndo();
+            } else {
+              handleNormalize();
+            }
+          }}
+          disabled={isNormalizing || !thread.schema.trim()}
+          title={originalSchema ? "Undo normalization" : "Normalize schema using AI"}
+        >
+          {isNormalizing ? (
+            <>
+              <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+              Normalizing
+            </>
+          ) : originalSchema ? (
+            <>
+              <Undo2 className="h-3 w-3 mr-1" />
+              Undo
+            </>
+          ) : (
+            <>
+              <Sparkles className="h-3 w-3 mr-1" />
+              Normalize
+            </>
+          )}
+        </Button>
+      </div>
+      <Input
+        value={thread.schemaDescription || ''}
+        onChange={(e) => onUpdate({ schemaDescription: e.target.value })}
+        placeholder="Schema description (optional)"
+        className="text-sm"
+        onClick={(e) => e.stopPropagation()}
+      />
+    </div>
+  );
+}
+
+// Schema Thread Section
 export function SchemaThreadSection({
   threads,
   onAddThread,
@@ -290,24 +439,128 @@ export function SchemaThreadSection({
       copiedStates={copiedStates}
       onCopy={onCopy}
       renderContent={(thread, onUpdate) => (
-        <div className="space-y-3">
-          <Textarea
-            value={thread.schema}
-            onChange={(e) => onUpdate({ schema: e.target.value })}
-            placeholder="Enter Zod schema..."
-            className="font-mono text-xs h-40"
-            onClick={(e) => e.stopPropagation()}
-          />
-          <Input
-            value={thread.schemaDescription || ''}
-            onChange={(e) => onUpdate({ schemaDescription: e.target.value })}
-            placeholder="Schema description (optional)"
-            className="text-sm"
-            onClick={(e) => e.stopPropagation()}
-          />
-        </div>
+        <SchemaContent thread={thread} onUpdate={onUpdate} />
       )}
     />
+  );
+}
+
+// System Prompt content component - separate to handle hooks properly
+function SystemPromptContent({
+  thread,
+  onUpdate
+}: {
+  thread: SystemPromptThread;
+  onUpdate: (updates: Partial<SystemPromptThread>) => void
+}) {
+  const [isNormalizing, setIsNormalizing] = useState(false);
+  const [originalPrompt, setOriginalPrompt] = useState<string | null>(null);
+
+  const detectedVariables = useMemo(
+    () => detectVariables(thread.prompt),
+    [thread.prompt]
+  );
+
+  const handleNormalize = async () => {
+    if (!thread.prompt.trim()) return;
+
+    // Store original prompt for undo
+    setOriginalPrompt(thread.prompt);
+
+    setIsNormalizing(true);
+    try {
+      const response = await fetch('/api/normalize-prompt', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ prompt: thread.prompt }),
+      });
+
+      const data = await response.json();
+      if (data.success && data.normalizedPrompt) {
+        const newVariables = detectVariables(data.normalizedPrompt);
+        const updatedVariables = getVariableDefaults(newVariables, thread.variables);
+        onUpdate({ prompt: data.normalizedPrompt, variables: updatedVariables });
+      } else {
+        console.error('Normalization failed:', data.error);
+        setOriginalPrompt(null);
+      }
+    } catch (error) {
+      console.error('Error normalizing prompt:', error);
+      setOriginalPrompt(null);
+    } finally {
+      setIsNormalizing(false);
+    }
+  };
+
+  const handleUndo = () => {
+    if (originalPrompt) {
+      const newVariables = detectVariables(originalPrompt);
+      const updatedVariables = getVariableDefaults(newVariables, thread.variables);
+      onUpdate({ prompt: originalPrompt, variables: updatedVariables });
+      setOriginalPrompt(null);
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="relative">
+        <Textarea
+          value={thread.prompt}
+          onChange={(e) => {
+            const newPrompt = e.target.value;
+            const newVariables = detectVariables(newPrompt);
+            const updatedVariables = getVariableDefaults(newVariables, thread.variables);
+            onUpdate({ prompt: newPrompt, variables: updatedVariables });
+            // Clear original when user manually edits after normalization
+            if (originalPrompt) {
+              setOriginalPrompt(null);
+            }
+          }}
+          placeholder="Enter system prompt..."
+          className="text-sm h-32 pr-20"
+          onClick={(e) => e.stopPropagation()}
+        />
+        <Button
+          size="sm"
+          variant="outline"
+          className="absolute top-2 right-2"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (originalPrompt) {
+              handleUndo();
+            } else {
+              handleNormalize();
+            }
+          }}
+          disabled={isNormalizing || !thread.prompt.trim()}
+          title={originalPrompt ? "Undo normalization" : "Improve prompt using AI"}
+        >
+          {isNormalizing ? (
+            <>
+              <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+              Improving
+            </>
+          ) : originalPrompt ? (
+            <>
+              <Undo2 className="h-3 w-3 mr-1" />
+              Undo
+            </>
+          ) : (
+            <>
+              <Sparkles className="h-3 w-3 mr-1" />
+              Improve
+            </>
+          )}
+        </Button>
+      </div>
+      <VariableInputs
+        variableNames={detectedVariables}
+        variables={thread.variables}
+        onVariableChange={(variables) => onUpdate({ variables })}
+      />
+    </div>
   );
 }
 
@@ -342,15 +595,45 @@ export function SystemPromptThreadSection({
       copiedStates={copiedStates}
       onCopy={onCopy}
       renderContent={(thread, onUpdate) => (
-        <Textarea
-          value={thread.prompt}
-          onChange={(e) => onUpdate({ prompt: e.target.value })}
-          placeholder="Enter system prompt..."
-          className="text-sm h-32"
-          onClick={(e) => e.stopPropagation()}
-        />
+        <SystemPromptContent thread={thread} onUpdate={onUpdate} />
       )}
     />
+  );
+}
+
+// Prompt Data content component - separate to handle hooks properly
+function PromptDataContent({
+  thread,
+  onUpdate
+}: {
+  thread: PromptDataThread;
+  onUpdate: (updates: Partial<PromptDataThread>) => void
+}) {
+  const detectedVariables = useMemo(
+    () => detectVariables(thread.prompt),
+    [thread.prompt]
+  );
+
+  return (
+    <div className="space-y-3">
+      <Textarea
+        value={thread.prompt}
+        onChange={(e) => {
+          const newPrompt = e.target.value;
+          const newVariables = detectVariables(newPrompt);
+          const updatedVariables = getVariableDefaults(newVariables, thread.variables);
+          onUpdate({ prompt: newPrompt, variables: updatedVariables });
+        }}
+        placeholder="Enter prompt or JSON data..."
+        className="font-mono text-xs h-40"
+        onClick={(e) => e.stopPropagation()}
+      />
+      <VariableInputs
+        variableNames={detectedVariables}
+        variables={thread.variables}
+        onVariableChange={(variables) => onUpdate({ variables })}
+      />
+    </div>
   );
 }
 
@@ -385,13 +668,7 @@ export function PromptDataThreadSection({
       copiedStates={copiedStates}
       onCopy={onCopy}
       renderContent={(thread, onUpdate) => (
-        <Textarea
-          value={thread.prompt}
-          onChange={(e) => onUpdate({ prompt: e.target.value })}
-          placeholder="Enter prompt or JSON data..."
-          className="font-mono text-xs h-40"
-          onClick={(e) => e.stopPropagation()}
-        />
+        <PromptDataContent thread={thread} onUpdate={onUpdate} />
       )}
     />
   );
