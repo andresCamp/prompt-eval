@@ -11,6 +11,7 @@ const google = createGoogleGenerativeAI({
 });
  
 import { groq } from '@ai-sdk/groq';
+import { perplexity } from '@ai-sdk/perplexity';
 import { generateText } from 'ai';
 
 // Map model slug -> provider key
@@ -26,6 +27,12 @@ const MODEL_PROVIDER_MAP: Record<string, string> = {
   'gpt-4o': 'openai',
   // Groq
   'moonshotai/kimi-k2-instruct': 'groq',
+  // Perplexity
+  'sonar-deep-research': 'perplexity',
+  'sonar-reasoning-pro': 'perplexity',
+  'sonar-reasoning': 'perplexity',
+  'sonar-pro': 'perplexity',
+  'sonar': 'perplexity',
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -34,6 +41,7 @@ const PROVIDER_FACTORY: Record<string, (model: string) => any> = {
   anthropic,
   google,
   groq,
+  perplexity,
 };
 
 export async function POST(req: Request) {

@@ -63,34 +63,40 @@ const DEFAULT_PROMPT = `{
   "available": true
 }`;
 
-export default function GenerateObjectPlaygroundPage({ 
-  params 
-}: { 
-  params: Promise<{ chatId: string }> 
+export default function GenerateObjectPlaygroundPage({
+  params
+}: {
+  params: Promise<{ chatId: string }>
 }) {
-  // Unwrap the params Promise
+  // Unwrap the params Promise - MUST be first
   const { chatId } = use(params);
-  
-  // Set per-page namespace for storage keys (scoped to object/[chatId])
-  if (typeof window !== 'undefined') {
-    (window as unknown as { __PAGE_NS__?: string }).__PAGE_NS__ = `@object-chat-${chatId}`;
-  }
-  
+
+  // All hooks MUST be declared before any conditional logic or returns
   const [mounted, setMounted] = useState(false);
-  
+
+  // Copy management
+  const [copiedStates, setCopiedStates] = useState<Record<string, boolean>>({});
+
   // Chat-specific config atom - unique per chatId
   const configAtom = configAtomFamily(chatId);
   const [config, setConfig] = useAtom(configAtom);
-  
+
+  // Set per-page namespace for storage keys (scoped to object/[chatId])
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      (window as unknown as { __PAGE_NS__?: string }).__PAGE_NS__ = `@object-chat-${chatId}`;
+    }
+  }, [chatId]);
+
   // Wait for client mount to avoid hydration issues
   useEffect(() => {
     setMounted(true);
   }, []);
-  
+
   // Set defaults if config is empty
   useEffect(() => {
     if (!mounted) return;
-    
+
     if (config.modelThreads.length === 0) {
       console.log('🏗️ Setting default config');
       setConfig({
@@ -301,9 +307,6 @@ export default function GenerateObjectPlaygroundPage({
   const handleUpdateConfig = (updates: Partial<GenerateObjectConfig>) => {
     setConfig(prev => prev ? ({ ...prev, ...updates }) : prev);
   };
-
-  // Copy management
-  const [copiedStates, setCopiedStates] = useState<Record<string, boolean>>({});
 
   const handleCopy = async (text: string, key: string) => {
     try {

@@ -232,7 +232,7 @@ export function TextResultsGrid({
                 Error: {thread.result.error}
               </div>
             ) : thread.result.text ? (
-              <div className="bg-gray-50 p-3 rounded-md overflow-x-auto text-sm whitespace-pre-wrap">
+              <div className="bg-gray-50 dark:bg-neutral-800 p-3 rounded-md overflow-x-auto text-sm whitespace-pre-wrap dark:text-gray-100">
                 {thread.result.text}
               </div>
             ) : (
@@ -290,12 +290,12 @@ export function TextResultsGrid({
         </div>
       </div>
       
-      <ScrollArea className="w-full border rounded-lg bg-white dark:bg-transparent">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50 dark:bg-white sticky top-0 z-10">
+      <ScrollArea className="w-full border rounded-lg bg-white dark:bg-neutral-900">
+        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+          <thead className="bg-gray-50 dark:bg-neutral-800 sticky top-0 z-10">
             <tr>
-              <th 
-                className="sticky left-0 bg-gray-50 dark:bg-neutral-900 px-4 py-2 text-left text-sm font-medium text-gray-100 z-20" 
+              <th
+                className="sticky left-0 bg-gray-50 dark:bg-neutral-800 px-4 py-2 text-left text-sm font-medium text-gray-900 dark:text-gray-100 z-20" 
                 style={{ width: TEST_CASE_COL_WIDTH, minWidth: TEST_CASE_COL_WIDTH }}
               >
                 Test Case
@@ -307,7 +307,7 @@ export function TextResultsGrid({
                     width: THREAD_COL_WIDTH,
                     minWidth: THREAD_COL_WIDTH,
                   }}
-                  className="px-4 py-2 text-left text-sm font-medium text-gray-900 border-l border-gray-200"
+                  className="px-4 py-2 text-left text-sm font-medium text-gray-900 dark:text-gray-100 border-l border-gray-200 dark:border-gray-700"
                 >
                   <div className="flex items-center justify-between">
                     <span className="truncate max-w-[200px]" title={thread.name}>
@@ -347,7 +347,7 @@ export function TextResultsGrid({
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-200 bg-white dark:bg-neutral-900">
+          <tbody className="divide-y divide-gray-200 dark:divide-gray-700 bg-white dark:bg-neutral-900">
             {testCaseArray.map((testCase) => (
               <tr key={testCase.key}>
                 <td 
@@ -371,7 +371,7 @@ export function TextResultsGrid({
                         width: THREAD_COL_WIDTH,
                         minWidth: THREAD_COL_WIDTH,
                       }}
-                      className="whitespace-normal px-4 py-2 text-sm text-gray-500 dark:text-gray-400 align-top border-l border-gray-200"
+                      className="whitespace-normal px-4 py-2 text-sm text-gray-500 dark:text-gray-400 align-top border-l border-gray-200 dark:border-gray-700"
                     >
                       {matchesTestCase ? <ThreadCell thread={thread} /> : (
                         <div className="text-gray-300 dark:text-gray-500 text-xs">N/A</div>
