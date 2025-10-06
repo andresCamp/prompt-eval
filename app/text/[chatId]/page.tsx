@@ -38,6 +38,7 @@ import {
 } from '@/components/generate-text-playground/CollapsibleThreadSection';
 import { TextResultsGrid } from '@/components/generate-text-playground/ResultsGrid';
 import { generateId } from '@/components/prompt-playground/shared/utils';
+import { replaceVariables } from '@/components/generate-object-playground/utils';
 // Module hydration uses localStorage directly (no hooks needed here)
 
 // Default values
@@ -424,6 +425,17 @@ export default function GenerateTextPlaygroundPage({
     }));
 
     try {
+      // Replace variables in system prompt and prompt data
+      const processedSystemPrompt = replaceVariables(
+        thread.systemPromptThread.prompt,
+        thread.systemPromptThread.variables
+      );
+
+      const processedPrompt = replaceVariables(
+        thread.promptDataThread.prompt,
+        thread.promptDataThread.variables
+      );
+
       const response = await fetch('/api/generate-text', {
         method: 'POST',
         headers: {
@@ -432,8 +444,8 @@ export default function GenerateTextPlaygroundPage({
         body: JSON.stringify({
           model: thread.modelThread.model,
           provider: thread.modelThread.provider,
-          system: thread.systemPromptThread.prompt,
-          prompt: thread.promptDataThread.prompt,
+          system: processedSystemPrompt,
+          prompt: processedPrompt,
           temperature: config.temperature,
           maxOutputTokens: config.maxOutputTokens
         }),
@@ -531,7 +543,7 @@ export default function GenerateTextPlaygroundPage({
   }
 
   return (
-    <div className="mx-auto p-6 space-y-6 max-w-none">
+    <div className="mx-auto p-6 space-y-6 ">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -585,7 +597,7 @@ export default function GenerateTextPlaygroundPage({
       </Card>
 
       {/* Pipeline Threading */}
-      <div className="space-y-6">
+      <div className="space-y-6 max-w-4xl mx-auto">
         {/* Model Threads */}
         <TextModelThreadSection
           threads={config.modelThreads}
