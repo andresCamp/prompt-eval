@@ -12,7 +12,8 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { Loader2, Play, Copy, Check, Clock, Hash, Lock, Unlock, ArrowUpDown, FileText } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Loader2, Play, Copy, Check, Clock, Hash, Lock, Unlock, ArrowUpDown, FileText, LayoutGrid } from 'lucide-react';
 import { GenerateObjectExecutionThread } from './types';
 import { useAtom } from 'jotai';
 import { snapshotAtomFamily, buildSnapshotFromObjectThread, getGenerateObjectThreadKey } from '@/lib/atoms';
@@ -27,6 +28,7 @@ interface ResultsGridProps {
 }
 
 type SortOption = 'model' | 'schema' | 'system' | 'prompt' | 'status';
+type ColumnOption = 'auto' | '1' | '2' | '3' | '4' | 'custom';
 
 export function ResultsGrid({
   executionThreads,
@@ -35,6 +37,8 @@ export function ResultsGrid({
   copiedStates,
 }: ResultsGridProps) {
   const [sortBy, setSortBy] = useState<SortOption>('model');
+  const [columns, setColumns] = useState<ColumnOption>('auto');
+  const [customColumnCount, setCustomColumnCount] = useState<number>(5);
 
   const copyThread = (thread: GenerateObjectExecutionThread) => {
     const ns = (typeof window !== 'undefined' ? (window as unknown as { __PAGE_NS__?: string }).__PAGE_NS__ : undefined);
@@ -95,6 +99,27 @@ export function ResultsGrid({
 
   const anyThreadRunning = executionThreads.some(t => t.isRunning);
   const visibleThreads = executionThreads.filter(t => t.visible);
+
+  // Get grid class based on column selection
+  const getGridClass = () => {
+    if (columns === 'auto') {
+      return 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4';
+    }
+    // For fixed columns and custom, use inline styles instead
+    return '';
+  };
+
+  // Get grid style for custom and fixed columns (using CSS Grid directly)
+  const getGridStyle = () => {
+    if (columns === 'auto') {
+      return {};
+    } else if (columns === 'custom') {
+      return { gridTemplateColumns: `repeat(${customColumnCount}, minmax(0, 1fr))` };
+    } else {
+      // For fixed 1, 2, 3, 4 columns
+      return { gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` };
+    }
+  };
 
   // Sort threads based on selected option
   const sortedThreads = [...executionThreads].sort((a, b) => {
@@ -199,13 +224,9 @@ export function ResultsGrid({
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-3">
-          <div className="text-sm text-gray-600 dark:text-gray-400">
-            {visibleThreads.length} threads
-          </div>
+        <div className="flex items-center gap-3 flex-wrap">
           <div className="flex items-center gap-2">
             <ArrowUpDown className="h-4 w-4 text-gray-500" />
-            <span className="text-sm text-gray-600 dark:text-gray-400">Sort by:</span>
             <ToggleGroup type="single" value={sortBy} onValueChange={(value) => value && setSortBy(value as SortOption)} size="sm" variant="outline">
               <ToggleGroupItem
                 value="model"
@@ -238,6 +259,42 @@ export function ResultsGrid({
               <ToggleGroupItem value="status" aria-label="Sort by status">
                 Status
               </ToggleGroupItem>
+            </ToggleGroup>
+          </div>
+          <div className="flex items-center gap-2">
+            <LayoutGrid className="h-4 w-4 text-gray-500" />
+            <ToggleGroup type="single" value={columns === 'custom' ? '' : columns} onValueChange={(value) => value && setColumns(value as ColumnOption)} size="sm" variant="outline">
+              <ToggleGroupItem value="auto" aria-label="Auto columns">
+                Auto
+              </ToggleGroupItem>
+              <ToggleGroupItem value="1" aria-label="1 column">
+                1
+              </ToggleGroupItem>
+              <ToggleGroupItem value="2" aria-label="2 columns">
+                2
+              </ToggleGroupItem>
+              <ToggleGroupItem value="3" aria-label="3 columns">
+                3
+              </ToggleGroupItem>
+              <ToggleGroupItem value="4" aria-label="4 columns">
+                4
+              </ToggleGroupItem>
+              {columns !== 'custom' ? (
+                <ToggleGroupItem value="custom" aria-label="Custom columns">
+                  Custom
+                </ToggleGroupItem>
+              ) : (
+                <Input
+                  type="number"
+                  min={1}
+                  max={12}
+                  value={customColumnCount}
+                  onChange={(e) => setCustomColumnCount(Math.max(1, Math.min(12, parseInt(e.target.value) || 1)))}
+                  onBlur={() => setColumns('auto')}
+                  autoFocus
+                  className="w-16 h-8"
+                />
+              )}
             </ToggleGroup>
           </div>
         </div>
@@ -280,7 +337,7 @@ export function ResultsGrid({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+      <div className={`grid ${getGridClass()} gap-4`} style={getGridStyle()}>
         {sortedThreads.map((thread) => (
           <ThreadCard
             key={thread.id}
