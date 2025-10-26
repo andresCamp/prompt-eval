@@ -15,10 +15,10 @@
 
 'use client';
 
-import { useState, useEffect, use } from 'react';
+import { useState, useEffect, use, useRef } from 'react';
 import { useAtom } from 'jotai';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, GitBranch } from 'lucide-react';
+import { Loader2, GitBranch, Brain, Code, Cpu, FileJson, LayoutGrid } from 'lucide-react';
 import { getGenerateObjectThreadKey, buildSnapshotFromThread } from '@/lib/atoms';
 import { 
   configAtomFamily
@@ -72,6 +72,13 @@ export default function GenerateObjectPlaygroundPage({
 
   // All hooks MUST be declared before any conditional logic or returns
   const [mounted, setMounted] = useState(false);
+
+  // Refs for scrolling to sections
+  const modelSectionRef = useRef<HTMLDivElement>(null);
+  const schemaSectionRef = useRef<HTMLDivElement>(null);
+  const systemSectionRef = useRef<HTMLDivElement>(null);
+  const promptSectionRef = useRef<HTMLDivElement>(null);
+  const resultsSectionRef = useRef<HTMLDivElement>(null);
 
   // Copy management
   const [copiedStates, setCopiedStates] = useState<Record<string, boolean>>({});
@@ -322,6 +329,11 @@ export default function GenerateObjectPlaygroundPage({
     } catch (err) {
       console.error('Failed to copy text: ', err);
     }
+  };
+
+  // Scroll to section
+  const scrollToSection = (ref: React.RefObject<HTMLDivElement | null>) => {
+    ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
   // Model thread handlers
@@ -652,102 +664,137 @@ export default function GenerateObjectPlaygroundPage({
       </div>
 
 
-      {/* Pipeline Flow Visualization */}
-      <Card className="bg-gradient-to-r from-blue-50 to-purple-50 dark:bg-gradient-to-r dark:from-slate-800 dark:to-slate-900 border-2 border-dashed dark:border-slate-700">
-        <CardContent className="pt-6">
-          <div className="flex items-center justify-center gap-4 text-sm font-medium text-gray-700 dark:text-gray-300">
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-              Models ({config.modelThreads.length})
-            </div>
-            <div>�</div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-              Schemas ({config.schemaThreads.length})
-            </div>
-            <div>�</div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
-              System ({config.systemPromptThreads.length})
-            </div>
-            <div>�</div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
-              Prompts ({config.promptDataThreads.length})
-            </div>
-            <div>�</div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
-              Output ({totalCombinations})
-            </div>
+      {/* Pipeline Flow Visualization - Sticky Floating Navigation */}
+      <div className="sticky top-3 z-50 mx-auto w-fit bg-gradient-to-r from-blue-50 to-purple-50 dark:from-slate-800 dark:to-slate-900 border-2 border-dashed border-gray-300 dark:border-slate-700 rounded-full shadow-lg backdrop-blur-sm bg-opacity-95 dark:bg-opacity-95">
+        <div className="px-6 py-2">
+          <div className="flex items-center justify-center gap-3 text-sm font-medium text-gray-700 dark:text-gray-300">
+            <button
+              onClick={() => scrollToSection(modelSectionRef)}
+              className="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors cursor-pointer"
+              title="Jump to Models section"
+            >
+              <Brain className="h-4 w-4 text-blue-600" />
+              <span className="hidden sm:inline">Models ({config.modelThreads.length})</span>
+              <span className="sm:hidden">({config.modelThreads.length})</span>
+            </button>
+            <div className="text-gray-400">➜</div>
+            <button
+              onClick={() => scrollToSection(schemaSectionRef)}
+              className="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors cursor-pointer"
+              title="Jump to Schemas section"
+            >
+              <Code className="h-4 w-4 text-green-600" />
+              <span className="hidden sm:inline">Schemas ({config.schemaThreads.length})</span>
+              <span className="sm:hidden">({config.schemaThreads.length})</span>
+            </button>
+            <div className="text-gray-400">➜</div>
+            <button
+              onClick={() => scrollToSection(systemSectionRef)}
+              className="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-yellow-100 dark:hover:bg-yellow-900/30 transition-colors cursor-pointer"
+              title="Jump to System Prompts section"
+            >
+              <Cpu className="h-4 w-4 text-yellow-600" />
+              <span className="hidden sm:inline">System ({config.systemPromptThreads.length})</span>
+              <span className="sm:hidden">({config.systemPromptThreads.length})</span>
+            </button>
+            <div className="text-gray-400">➜</div>
+            <button
+              onClick={() => scrollToSection(promptSectionRef)}
+              className="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-orange-100 dark:hover:bg-orange-900/30 transition-colors cursor-pointer"
+              title="Jump to Prompts section"
+            >
+              <FileJson className="h-4 w-4 text-orange-600" />
+              <span className="hidden sm:inline">Prompts ({config.promptDataThreads.length})</span>
+              <span className="sm:hidden">({config.promptDataThreads.length})</span>
+            </button>
+            <div className="text-gray-400">➜</div>
+            <button
+              onClick={() => scrollToSection(resultsSectionRef)}
+              className="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-colors cursor-pointer"
+              title="Jump to Results section"
+            >
+              <LayoutGrid className="h-4 w-4 text-purple-600" />
+              <span className="hidden sm:inline">Output ({totalCombinations})</span>
+              <span className="sm:hidden">({totalCombinations})</span>
+            </button>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Pipeline Threading */}
       <div className="space-y-6">
         {/* Model Threads */}
-        <ModelThreadSection
-          threads={config.modelThreads}
-          onAddThread={handleAddModelThread}
-          onUpdateThread={handleUpdateModelThread}
-          onDeleteThread={handleDeleteModelThread}
-          onDuplicateThread={handleDuplicateModelThread}
-          copiedStates={copiedStates}
-          onCopy={handleCopy}
-        />
+        <div ref={modelSectionRef}>
+          <ModelThreadSection
+            threads={config.modelThreads}
+            onAddThread={handleAddModelThread}
+            onUpdateThread={handleUpdateModelThread}
+            onDeleteThread={handleDeleteModelThread}
+            onDuplicateThread={handleDuplicateModelThread}
+            copiedStates={copiedStates}
+            onCopy={handleCopy}
+          />
+        </div>
 
         {/* Schema Threads */}
-        <SchemaThreadSection
-          threads={config.schemaThreads}
-          onAddThread={handleAddSchemaThread}
-          onUpdateThread={handleUpdateSchemaThread}
-          onDeleteThread={handleDeleteSchemaThread}
-          onDuplicateThread={handleDuplicateSchemaThread}
-          copiedStates={copiedStates}
-          onCopy={handleCopy}
-        />
+        <div ref={schemaSectionRef}>
+          <SchemaThreadSection
+            threads={config.schemaThreads}
+            onAddThread={handleAddSchemaThread}
+            onUpdateThread={handleUpdateSchemaThread}
+            onDeleteThread={handleDeleteSchemaThread}
+            onDuplicateThread={handleDuplicateSchemaThread}
+            copiedStates={copiedStates}
+            onCopy={handleCopy}
+          />
+        </div>
 
         {/* System Prompt Threads */}
-        <SystemPromptThreadSection
-          threads={config.systemPromptThreads}
-          onAddThread={handleAddSystemPromptThread}
-          onUpdateThread={handleUpdateSystemPromptThread}
-          onDeleteThread={handleDeleteSystemPromptThread}
-          onDuplicateThread={handleDuplicateSystemPromptThread}
-          copiedStates={copiedStates}
-          onCopy={handleCopy}
-        />
+        <div ref={systemSectionRef}>
+          <SystemPromptThreadSection
+            threads={config.systemPromptThreads}
+            onAddThread={handleAddSystemPromptThread}
+            onUpdateThread={handleUpdateSystemPromptThread}
+            onDeleteThread={handleDeleteSystemPromptThread}
+            onDuplicateThread={handleDuplicateSystemPromptThread}
+            copiedStates={copiedStates}
+            onCopy={handleCopy}
+          />
+        </div>
 
         {/* Prompt Data Threads */}
-        <PromptDataThreadSection
-          threads={config.promptDataThreads}
-          onAddThread={handleAddPromptDataThread}
-          onUpdateThread={handleUpdatePromptDataThread}
-          onDeleteThread={handleDeletePromptDataThread}
-          onDuplicateThread={handleDuplicatePromptDataThread}
-          copiedStates={copiedStates}
-          onCopy={handleCopy}
-        />
+        <div ref={promptSectionRef}>
+          <PromptDataThreadSection
+            threads={config.promptDataThreads}
+            onAddThread={handleAddPromptDataThread}
+            onUpdateThread={handleUpdatePromptDataThread}
+            onDeleteThread={handleDeletePromptDataThread}
+            onDuplicateThread={handleDuplicatePromptDataThread}
+            copiedStates={copiedStates}
+            onCopy={handleCopy}
+          />
+        </div>
       </div>
 
       {/* Results Grid */}
-      <Card className="border-purple-200 border-2">
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
-            <CardTitle>Results ({totalCombinations} combinations)</CardTitle>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <ResultsGrid
-            executionThreads={config.executionThreads}
-            onRunThread={handleRunExecutionThread}
-            onCopy={handleCopy}
-            copiedStates={copiedStates}
-          />
-        </CardContent>
-      </Card>
+      <div ref={resultsSectionRef}>
+        <Card className="border-purple-200 border-2">
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
+              <CardTitle>Results ({totalCombinations} combinations)</CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <ResultsGrid
+              executionThreads={config.executionThreads}
+              onRunThread={handleRunExecutionThread}
+              onCopy={handleCopy}
+              copiedStates={copiedStates}
+            />
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }
