@@ -305,7 +305,12 @@ export default function GenerateObjectPlaygroundPage({
   ]);
 
   const handleUpdateConfig = (updates: Partial<GenerateObjectConfig>) => {
-    setConfig(prev => prev ? ({ ...prev, ...updates }) : prev);
+    console.log('handleUpdateConfig called with updates:', updates);
+    setConfig(prev => {
+      const newConfig = prev ? ({ ...prev, ...updates }) : prev;
+      console.log('New config after update:', newConfig);
+      return newConfig;
+    });
   };
 
   const handleCopy = async (text: string, key: string) => {
@@ -335,10 +340,13 @@ export default function GenerateObjectPlaygroundPage({
   };
 
   const handleUpdateModelThread = (id: string, updates: Partial<GenerateObjectModelThread>) => {
+    console.log('handleUpdateModelThread called:', { id, updates });
+    const updatedThreads = config.modelThreads.map(thread =>
+      thread.id === id ? { ...thread, ...updates } : thread
+    );
+    console.log('Updated threads:', updatedThreads);
     handleUpdateConfig({
-      modelThreads: config.modelThreads.map(thread => 
-        thread.id === id ? { ...thread, ...updates } : thread
-      )
+      modelThreads: updatedThreads
     });
   };
 
@@ -413,10 +421,13 @@ export default function GenerateObjectPlaygroundPage({
   };
 
   const handleUpdateSystemPromptThread = (id: string, updates: Partial<SystemPromptThread>) => {
+    console.log('handleUpdateSystemPromptThread called:', { id, updates });
+    const updatedThreads = config.systemPromptThreads.map(thread =>
+      thread.id === id ? { ...thread, ...updates } : thread
+    );
+    console.log('Updated system prompt threads:', updatedThreads);
     handleUpdateConfig({
-      systemPromptThreads: config.systemPromptThreads.map(thread => 
-        thread.id === id ? { ...thread, ...updates } : thread
-      )
+      systemPromptThreads: updatedThreads
     });
   };
 

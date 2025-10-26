@@ -21,6 +21,7 @@ interface TitleInputWithAIProps {
   onChange: (value: string) => void;
   content: string;
   contentType?: string;
+  siblingTitles?: string[];
   placeholder?: string;
   className?: string;
   disabled?: boolean;
@@ -31,6 +32,7 @@ export function TitleInputWithAI({
   onChange,
   content,
   contentType,
+  siblingTitles = [],
   placeholder = 'Thread name',
   className = '',
   disabled = false,
@@ -55,6 +57,7 @@ export function TitleInputWithAI({
         body: JSON.stringify({
           content: content.trim(),
           contentType,
+          siblingTitles: siblingTitles.filter(t => t && t !== value), // Exclude empty and current title
         }),
       });
 

@@ -13,7 +13,7 @@ import { Card } from '@/components/ui/card';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Input } from '@/components/ui/input';
-import { Loader2, Play, Copy, Check, Clock, Hash, Lock, Unlock, ArrowUpDown, FileText, LayoutGrid } from 'lucide-react';
+import { Loader2, Play, Copy, Check, Clock, Hash, Lock, Unlock, ArrowUpDown, FileText, LayoutGrid, Brain, Code, Cpu, FileJson } from 'lucide-react';
 import { GenerateObjectExecutionThread } from './types';
 import { useAtom } from 'jotai';
 import { snapshotAtomFamily, buildSnapshotFromObjectThread, getGenerateObjectThreadKey } from '@/lib/atoms';
@@ -369,14 +369,14 @@ function ThreadCard({ thread, sortBy, onRunThread, onCopy, copiedStates }: Threa
   const result = (isLocked && snapshot?.result) ? snapshot.result : thread.result;
 
   // Determine field order based on sort
-  type FieldInfo = { name: string; color: string; key: string };
+  type FieldInfo = { name: string; icon: React.ComponentType<{ className?: string }>; color: string; key: string };
 
   const getFieldsInOrder = (): FieldInfo[] => {
     const fields = {
-      model: { name: thread.modelThread.name, color: 'bg-blue-500', key: 'model' },
-      schema: { name: thread.schemaThread.name, color: 'bg-green-500', key: 'schema' },
-      system: { name: thread.systemPromptThread.name, color: 'bg-yellow-500', key: 'system' },
-      prompt: { name: thread.promptDataThread.name, color: 'bg-orange-500', key: 'prompt' }
+      model: { name: thread.modelThread.name, icon: Brain, color: 'text-blue-600', key: 'model' },
+      schema: { name: thread.schemaThread.name, icon: Code, color: 'text-green-600', key: 'schema' },
+      system: { name: thread.systemPromptThread.name, icon: Cpu, color: 'text-yellow-600', key: 'system' },
+      prompt: { name: thread.promptDataThread.name, icon: FileJson, color: 'text-orange-600', key: 'prompt' }
     };
 
     switch (sortBy) {
@@ -406,12 +406,15 @@ function ThreadCard({ thread, sortBy, onRunThread, onCopy, copiedStates }: Threa
               {titleField.name}
             </h4>
             <div className="text-xs text-gray-500 dark:text-gray-400 mt-2 space-y-1">
-              {subtitleFields.map((field) => (
-                <div key={field.key} className="flex items-center gap-2 truncate" title={field.name}>
-                  <div className={`w-3 h-3 ${field.color} rounded-full flex-shrink-0`}></div>
-                  <span className="truncate">{field.name}</span>
-                </div>
-              ))}
+              {subtitleFields.map((field) => {
+                const Icon = field.icon;
+                return (
+                  <div key={field.key} className="flex items-center gap-2 truncate" title={field.name}>
+                    <Icon className={`h-4 w-4 ${field.color} flex-shrink-0`} />
+                    <span className="truncate">{field.name}</span>
+                  </div>
+                );
+              })}
             </div>
           </div>
           <div className="flex flex-col gap-1">

@@ -16,6 +16,7 @@ import {
   MODEL_PROVIDER_MAP,
 } from './shared/types';
 import { TitleInputWithAI } from './shared/TitleInputWithAI';
+import { BatchTitleGenerator } from './shared/BatchTitleGenerator';
 import type { 
   ModelThread, 
   DataThread, 
@@ -94,6 +95,14 @@ export function ModelThreadSection({
               <span>{totalWords}</span>
             </div>
           </div>
+          {threads.length > 1 && (
+            <BatchTitleGenerator
+              threads={threads}
+              getThreadContent={(thread) => `${thread.provider} ${thread.model}`}
+              contentType="model"
+              onUpdateThread={onUpdateThread}
+            />
+          )}
           <ChevronDown className={`h-4 w-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
           <Button
             variant="ghost"
@@ -135,6 +144,7 @@ export function ModelThreadSection({
                       onChange={(value) => onUpdateThread(thread.id, { name: value })}
                       content={`${thread.provider} ${thread.model}`}
                       contentType="model"
+                      siblingTitles={threads.map(t => t.name)}
                       placeholder="Thread name"
                       className="flex-1 mr-2"
                     />

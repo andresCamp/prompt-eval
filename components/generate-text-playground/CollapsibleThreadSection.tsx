@@ -20,6 +20,7 @@ import { PROVIDERS } from '@/lib/llm-providers';
 import { detectVariables, getVariableDefaults } from '@/components/generate-object-playground/utils';
 import { VariableInputs } from '@/components/generate-object-playground/VariableInputs';
 import { TitleInputWithAI } from '@/components/prompt-playground/shared/TitleInputWithAI';
+import { BatchTitleGenerator } from '@/components/prompt-playground/shared/BatchTitleGenerator';
 
 // Get all models that support text generation (assume all language models do)
 const getTextGenerationModels = () => {
@@ -102,7 +103,17 @@ function CollapsibleThreadSection<T extends BaseThread>({
               <span className="text-sm text-gray-500">({hiddenCount} hidden)</span>
             )}
           </div>
-          <ChevronDown className={`h-5 w-5 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+          <div className="flex items-center gap-2">
+            {getThreadContent && threads.length > 1 && (
+              <BatchTitleGenerator
+                threads={threads}
+                getThreadContent={getThreadContent}
+                contentType={contentType}
+                onUpdateThread={onUpdateThread}
+              />
+            )}
+            <ChevronDown className={`h-5 w-5 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+          </div>
         </div>
       </CardHeader>
       {isOpen && (
@@ -129,6 +140,7 @@ function CollapsibleThreadSection<T extends BaseThread>({
                       onChange={(value) => applyUpdate(thread, { name: value } as Partial<T>)}
                       content={getThreadContent ? getThreadContent(thread) : ''}
                       contentType={contentType}
+                      siblingTitles={threads.map(t => t.name)}
                       placeholder="Thread name"
                       className="flex-1"
                     />
