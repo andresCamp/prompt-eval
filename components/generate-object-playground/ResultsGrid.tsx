@@ -8,12 +8,14 @@
 'use client';
 
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Input } from '@/components/ui/input';
-import { Loader2, Play, Copy, Check, Clock, Hash, Lock, Unlock, ArrowUpDown, FileText, LayoutGrid, Brain, Code, Cpu, FileJson } from 'lucide-react';
+import { ButtonGroup, ButtonGroupSeparator } from '@/components/ui/button-group';
+import { Loader2, Play, Copy, Check, Clock, Hash, Lock, Unlock, ArrowUpDown, FileText, LayoutGrid, Brain, Code, Cpu, FileJson, X } from 'lucide-react';
 import { GenerateObjectExecutionThread } from './types';
 import { useAtom } from 'jotai';
 import { snapshotAtomFamily, buildSnapshotFromObjectThread, getGenerateObjectThreadKey } from '@/lib/atoms';
@@ -39,23 +41,69 @@ export function ResultsGrid({
   const [sortBy, setSortBy] = useState<SortOption>('model');
   const [columns, setColumns] = useState<ColumnOption>('auto');
   const [customColumnCount, setCustomColumnCount] = useState<number>(5);
+  const [selectedThreadIds, setSelectedThreadIds] = useState<Set<string>>(new Set());
 
-  const copyThread = (thread: GenerateObjectExecutionThread) => {
-    const ns = (typeof window !== 'undefined' ? (window as unknown as { __PAGE_NS__?: string }).__PAGE_NS__ : undefined);
-    const key = getGenerateObjectThreadKey(thread, ns);
-    const snapRaw = (typeof window !== 'undefined') ? localStorage.getItem(`snapshot:${ns || 'root'}:go-snap:${key}`) : null;
-    const snap = snapRaw ? JSON.parse(snapRaw) : null;
-    const effective = snap?.result ? snap : { result: thread.result };
-    if (effective?.result?.object) {
-      const text = JSON.stringify({
-        thread: thread.name,
-        result: effective.result.object,
-        metadata: {
-          duration: effective.result.duration,
-          tokens: effective.result.usage
+  const toggleSelection = (threadId: string) => {
+    setSelectedThreadIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(threadId)) {
+        newSet.delete(threadId);
+      } else {
+        newSet.add(threadId);
+      }
+      return newSet;
+    });
+  };
+
+  const clearSelection = () => {
+    setSelectedThreadIds(new Set());
+  };
+
+  const selectByField = (fieldKey: 'model' | 'schema' | 'system' | 'prompt', value: string) => {
+    const matchingThreadIds = executionThreads
+      .filter(thread => {
+        switch (fieldKey) {
+          case 'model':
+            return thread.modelThread.name === value;
+          case 'schema':
+            return thread.schemaThread.name === value;
+          case 'system':
+            return thread.systemPromptThread.name === value;
+          case 'prompt':
+            return thread.promptDataThread.name === value;
         }
-      }, null, 2);
-      onCopy(text, `thread-${thread.id}`);
+      })
+      .map(thread => thread.id);
+
+    // Check if all matching threads are already selected
+    const allMatchingSelected = matchingThreadIds.every(id => selectedThreadIds.has(id));
+
+    if (allMatchingSelected && matchingThreadIds.length > 0) {
+      // If all matching threads are selected, deselect all (clear selection)
+      setSelectedThreadIds(new Set());
+    } else {
+      // Otherwise, select all matching threads
+      setSelectedThreadIds(new Set(matchingThreadIds));
+    }
+  };
+
+  const selectedCount = selectedThreadIds.size;
+
+  const handleRunAllThreads = async () => {
+    // Run all threads in batches to prevent rate limiting
+    const batchSize = 3;
+    for (let i = 0; i < executionThreads.length; i += batchSize) {
+      const batch = executionThreads.slice(i, i + batchSize);
+      await Promise.all(batch.map(thread => onRunThread(thread.id)));
+    }
+  };
+
+  const handleRunSelected = async () => {
+    const selectedThreads = executionThreads.filter(t => selectedThreadIds.has(t.id));
+    const batchSize = 3;
+    for (let i = 0; i < selectedThreads.length; i += batchSize) {
+      const batch = selectedThreads.slice(i, i + batchSize);
+      await Promise.all(batch.map(thread => onRunThread(thread.id)));
     }
   };
 
@@ -85,20 +133,6 @@ export function ResultsGrid({
 
     onCopy(JSON.stringify(allResults, null, 2), 'copy-all');
   };
-
-  const handleRunAllThreads = async () => {
-    for (const thread of executionThreads) {
-      const ns = (typeof window !== 'undefined' ? (window as unknown as { __PAGE_NS__?: string }).__PAGE_NS__ : undefined);
-      const key = getGenerateObjectThreadKey(thread, ns);
-      const hasSnap = (typeof window !== 'undefined') ? !!localStorage.getItem(`snapshot:${ns || 'root'}:go-snap:${key}`) : false;
-      if (!hasSnap && !thread.isRunning && thread.visible) {
-        await onRunThread(thread.id);
-      }
-    }
-  };
-
-  const anyThreadRunning = executionThreads.some(t => t.isRunning);
-  const visibleThreads = executionThreads.filter(t => t.visible);
 
   // Get grid class based on column selection
   const getGridClass = () => {
@@ -300,24 +334,6 @@ export function ResultsGrid({
         </div>
         <div className="flex items-center gap-2">
           <Button
-            onClick={handleRunAllThreads}
-            disabled={anyThreadRunning || visibleThreads.length === 0}
-            variant="outline"
-            size="sm"
-          >
-            {anyThreadRunning ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Running...
-              </>
-            ) : (
-              <>
-                <Play className="h-4 w-4 mr-2" />
-                Run All ({visibleThreads.length})
-              </>
-            )}
-          </Button>
-          <Button
             onClick={copyAll}
             variant="outline"
             size="sm"
@@ -343,12 +359,73 @@ export function ResultsGrid({
             key={thread.id}
             thread={thread}
             sortBy={sortBy}
+            isSelected={selectedThreadIds.has(thread.id)}
+            onToggleSelection={toggleSelection}
             onRunThread={onRunThread}
             onCopy={onCopy}
             copiedStates={copiedStates}
+            onSelectByField={selectByField}
           />
         ))}
       </div>
+
+      {/* Portal floating button to document.body */}
+      {typeof window !== 'undefined' && createPortal(
+        <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-50">
+          {selectedCount > 0 ? (
+            <ButtonGroup className="shadow-lg rounded-2xl">
+              <Button
+                onClick={handleRunSelected}
+                disabled={executionThreads.some(t => t.isRunning)}
+                size="lg"
+                className="px-6 py-3 text-base font-semibold rounded-2xl"
+              >
+                {executionThreads.some(t => t.isRunning) ? (
+                  <>
+                    <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                    Running...
+                  </>
+                ) : (
+                  <>
+                    <Play className="h-5 w-5 mr-2" />
+                    Run Selected ({selectedCount})
+                  </>
+                )}
+              </Button>
+              <ButtonGroupSeparator />
+              <Button
+                onClick={clearSelection}
+                size="lg"
+                className="rounded-2xl px-4 py-3"
+              >
+                <X className="h-5 w-5" />
+              </Button>
+            </ButtonGroup>
+          ) : (
+            <ButtonGroup className="shadow-lg rounded-2xl">
+              <Button
+                onClick={handleRunAllThreads}
+                disabled={executionThreads.some(t => t.isRunning) || executionThreads.length === 0}
+                size="lg"
+                className="px-6 py-3 text-base font-semibold rounded-2xl"
+              >
+                {executionThreads.some(t => t.isRunning) ? (
+                  <>
+                    <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                    Running...
+                  </>
+                ) : (
+                  <>
+                    <Play className="h-5 w-5 mr-2" />
+                    Run All ({executionThreads.length})
+                  </>
+                )}
+              </Button>
+            </ButtonGroup>
+          )}
+        </div>,
+        document.body
+      )}
     </div>
   );
 }
@@ -356,12 +433,15 @@ export function ResultsGrid({
 interface ThreadCardProps {
   thread: GenerateObjectExecutionThread;
   sortBy: SortOption;
+  isSelected: boolean;
+  onToggleSelection: (threadId: string) => void;
   onRunThread: (threadId: string) => void;
   onCopy: (text: string, key: string) => void;
   copiedStates: Record<string, boolean>;
+  onSelectByField: (fieldKey: 'model' | 'schema' | 'system' | 'prompt', value: string) => void;
 }
 
-function ThreadCard({ thread, sortBy, onRunThread, onCopy, copiedStates }: ThreadCardProps) {
+function ThreadCard({ thread, sortBy, isSelected, onToggleSelection, onRunThread, onCopy, copiedStates, onSelectByField }: ThreadCardProps) {
   const pageNs = (typeof window !== 'undefined' ? (window as unknown as { __PAGE_NS__?: string }).__PAGE_NS__ : undefined);
   const stableKey = getGenerateObjectThreadKey(thread, pageNs);
   const [snapshot] = useAtom(snapshotAtomFamily(stableKey));
@@ -397,19 +477,28 @@ function ThreadCard({ thread, sortBy, onRunThread, onCopy, copiedStates }: Threa
   const [titleField, ...subtitleFields] = fieldsInOrder;
 
   return (
-    <Card className="h-full flex flex-col gap-0 py-0">
+    <Card className={`h-full flex flex-col gap-0 py-0 ${isSelected ? 'ring-2 ring-primary' : ''}`}>
       {/* title and subtitle */}
       <div className="p-4 border-b border-gray-200 dark:border-gray-700">
         <div className="flex items-start justify-between gap-2 mb-0">
           <div className="flex-1 min-w-0">
-            <h4 className="font-medium text-sm truncate" title={titleField.name}>
+            <h4
+              className="font-medium text-sm truncate cursor-pointer hover:underline"
+              title={titleField.name}
+              onClick={() => onSelectByField(titleField.key as 'model' | 'schema' | 'system' | 'prompt', titleField.name)}
+            >
               {titleField.name}
             </h4>
             <div className="text-xs text-gray-500 dark:text-gray-400 mt-2 space-y-1">
               {subtitleFields.map((field) => {
                 const Icon = field.icon;
                 return (
-                  <div key={field.key} className="flex items-center gap-2 truncate" title={field.name}>
+                  <div
+                    key={field.key}
+                    className="flex items-center gap-2 truncate cursor-pointer hover:underline"
+                    title={field.name}
+                    onClick={() => onSelectByField(field.key as 'model' | 'schema' | 'system' | 'prompt', field.name)}
+                  >
                     <Icon className={`h-4 w-4 ${field.color} flex-shrink-0`} />
                     <span className="truncate">{field.name}</span>
                   </div>
@@ -418,7 +507,19 @@ function ThreadCard({ thread, sortBy, onRunThread, onCopy, copiedStates }: Threa
             </div>
           </div>
           <div className="flex flex-col gap-1">
-            <LockToggle thread={thread} />
+            {/* Row 1: Lock + Checkbox (horizontal) */}
+            <div className="flex gap-1">
+              <LockToggle thread={thread} />
+              <Button
+                size="icon"
+                variant={isSelected ? "default" : "outline"}
+                onClick={() => onToggleSelection(thread.id)}
+                className="h-8 w-8"
+              >
+                <Check className={`h-4 w-4 ${isSelected ? '' : 'opacity-0'}`} />
+              </Button>
+            </div>
+            {/* Row 2: Run button */}
             <Button
               size="icon"
               variant="outline"

@@ -18,8 +18,7 @@
 import { useState, useEffect, use } from 'react';
 import { useAtom } from 'jotai';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Loader2, Play, GitBranch } from 'lucide-react';
+import { Loader2, GitBranch } from 'lucide-react';
 import { getGenerateObjectThreadKey, buildSnapshotFromThread } from '@/lib/atoms';
 import { 
   configAtomFamily
@@ -612,21 +611,8 @@ export default function GenerateObjectPlaygroundPage({
     }
   };
 
-  const handleRunAllExecutionThreads = async () => {
-    // Run all visible execution threads
-    const visibleThreads = config.executionThreads.filter(thread => thread.visible);
-    
-    // Run in batches to prevent rate limiting
-    const batchSize = 3;
-    for (let i = 0; i < visibleThreads.length; i += batchSize) {
-      const batch = visibleThreads.slice(i, i + batchSize);
-      await Promise.all(batch.map(thread => handleRunExecutionThread(thread.id)));
-    }
-  };
-
   // Calculate total combinations (with null check)
   const totalCombinations = config?.executionThreads?.filter(t => t.visible).length || 0;
-  const anyThreadRunning = config?.executionThreads?.some(thread => thread.isRunning) || false;
 
   // Show loading until mounted to prevent hydration issues
   if (!mounted || !config) {
@@ -762,28 +748,6 @@ export default function GenerateObjectPlaygroundPage({
           />
         </CardContent>
       </Card>
-
-      {/* Floating Run Button */}
-      <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-50">
-        <Button
-          onClick={handleRunAllExecutionThreads}
-          disabled={anyThreadRunning || totalCombinations === 0}
-          size="lg"
-          className="shadow-lg hover:shadow-xl transition-all duration-200 bg-primary hover:bg-primary/90 text-primary-foreground px-6 py-3 text-base font-semibold rounded-full"
-        >
-          {anyThreadRunning ? (
-            <>
-              <Loader2 className="h-5 w-5 mr-2 animate-spin" />
-              Running...
-            </>
-          ) : (
-            <>
-              <Play className="h-5 w-5 mr-2" />
-              Run All ({totalCombinations})
-            </>
-          )}
-        </Button>
-      </div>
     </div>
   );
 }

@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Copy, Trash2, Brain, Code, Cpu, FileJson, Eye, EyeOff, ChevronDown, Sparkles, Loader2, Undo2 } from 'lucide-react';
+import { Plus, Copy, Trash2, Brain, Code, Cpu, FileJson, Eye, EyeOff, ChevronDown, Sparkles, Loader2, Undo2, GitBranchPlus, Check } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   GenerateObjectModelThread,
@@ -82,8 +82,11 @@ function CollapsibleThreadSection<T extends BaseThread>({
   defaultOpen = true,
 }: BaseThreadSectionProps<T>) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
-  void _copiedStates;
-  void _onCopy;
+  // These are used by child components through renderContent
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const copiedStates = _copiedStates;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const onCopy = _onCopy;
   const visibleThreads = threads.filter(t => t.visible);
   const hiddenCount = threads.length - visibleThreads.length;
   const applyUpdate = (thread: T, updates: Partial<T>) => {
@@ -166,7 +169,7 @@ function CollapsibleThreadSection<T extends BaseThread>({
                         }}
                         className="h-8 w-8"
                       >
-                        <Copy className="h-4 w-4" />
+                        <GitBranchPlus className="h-4 w-4" />
                       </Button>
                       <Button
                         variant="ghost"
@@ -284,10 +287,14 @@ export function ModelThreadSection({
 // Schema content component - separate to handle hooks properly
 function SchemaContent({
   thread,
-  onUpdate
+  onUpdate,
+  copiedStates,
+  onCopy,
 }: {
   thread: SchemaThread;
-  onUpdate: (updates: Partial<SchemaThread>) => void
+  onUpdate: (updates: Partial<SchemaThread>) => void;
+  copiedStates: Record<string, boolean>;
+  onCopy: (text: string, key: string) => void;
 }) {
   const [isNormalizing, setIsNormalizing] = useState(false);
   const [originalSchema, setOriginalSchema] = useState<string | null>(null);
@@ -381,13 +388,13 @@ function SchemaContent({
             }
           }}
           placeholder="Enter Zod schema..."
-          className="font-mono text-xs h-40 pr-20"
+          className="font-mono text-xs h-40 pr-24"
           onClick={(e) => e.stopPropagation()}
         />
         <Button
           size="sm"
           variant="outline"
-          className="absolute top-2 right-2"
+          className="absolute top-2 right-12"
           onClick={(e) => {
             e.stopPropagation();
             if (originalSchema) {
@@ -414,6 +421,23 @@ function SchemaContent({
               <Sparkles className="h-3 w-3 mr-1" />
               Normalize
             </>
+          )}
+        </Button>
+        <Button
+          size="icon"
+          variant="ghost"
+          className="absolute top-2 right-2 h-8 w-8"
+          onClick={(e) => {
+            e.stopPropagation();
+            onCopy(thread.schema, `schema-${thread.id}`);
+          }}
+          disabled={!thread.schema.trim()}
+          title="Copy schema"
+        >
+          {copiedStates[`schema-${thread.id}`] ? (
+            <Check className="h-4 w-4 text-green-600" />
+          ) : (
+            <Copy className="h-4 w-4" />
           )}
         </Button>
       </div>
@@ -461,7 +485,7 @@ export function SchemaThreadSection({
       getThreadContent={(thread) => thread.schema}
       contentType="schema"
       renderContent={(thread, onUpdate) => (
-        <SchemaContent thread={thread} onUpdate={onUpdate} />
+        <SchemaContent thread={thread} onUpdate={onUpdate} copiedStates={copiedStates} onCopy={onCopy} />
       )}
     />
   );
@@ -470,10 +494,14 @@ export function SchemaThreadSection({
 // System Prompt content component - separate to handle hooks properly
 function SystemPromptContent({
   thread,
-  onUpdate
+  onUpdate,
+  copiedStates,
+  onCopy,
 }: {
   thread: SystemPromptThread;
-  onUpdate: (updates: Partial<SystemPromptThread>) => void
+  onUpdate: (updates: Partial<SystemPromptThread>) => void;
+  copiedStates: Record<string, boolean>;
+  onCopy: (text: string, key: string) => void;
 }) {
   const [isNormalizing, setIsNormalizing] = useState(false);
   const [originalPrompt, setOriginalPrompt] = useState<string | null>(null);
@@ -541,13 +569,13 @@ function SystemPromptContent({
             }
           }}
           placeholder="Enter system prompt..."
-          className="text-sm h-32 pr-20"
+          className="text-sm h-32 pr-24"
           onClick={(e) => e.stopPropagation()}
         />
         <Button
           size="sm"
           variant="outline"
-          className="absolute top-2 right-2"
+          className="absolute top-2 right-12"
           onClick={(e) => {
             e.stopPropagation();
             if (originalPrompt) {
@@ -574,6 +602,23 @@ function SystemPromptContent({
               <Sparkles className="h-3 w-3 mr-1" />
               Improve
             </>
+          )}
+        </Button>
+        <Button
+          size="icon"
+          variant="ghost"
+          className="absolute top-2 right-2 h-8 w-8"
+          onClick={(e) => {
+            e.stopPropagation();
+            onCopy(thread.prompt, `system-${thread.id}`);
+          }}
+          disabled={!thread.prompt.trim()}
+          title="Copy system prompt"
+        >
+          {copiedStates[`system-${thread.id}`] ? (
+            <Check className="h-4 w-4 text-green-600" />
+          ) : (
+            <Copy className="h-4 w-4" />
           )}
         </Button>
       </div>
@@ -619,7 +664,7 @@ export function SystemPromptThreadSection({
       getThreadContent={(thread) => thread.prompt}
       contentType="system-prompt"
       renderContent={(thread, onUpdate) => (
-        <SystemPromptContent thread={thread} onUpdate={onUpdate} />
+        <SystemPromptContent thread={thread} onUpdate={onUpdate} copiedStates={copiedStates} onCopy={onCopy} />
       )}
     />
   );
@@ -628,10 +673,14 @@ export function SystemPromptThreadSection({
 // Prompt Data content component - separate to handle hooks properly
 function PromptDataContent({
   thread,
-  onUpdate
+  onUpdate,
+  copiedStates,
+  onCopy,
 }: {
   thread: PromptDataThread;
-  onUpdate: (updates: Partial<PromptDataThread>) => void
+  onUpdate: (updates: Partial<PromptDataThread>) => void;
+  copiedStates: Record<string, boolean>;
+  onCopy: (text: string, key: string) => void;
 }) {
   const detectedVariables = useMemo(
     () => detectVariables(thread.prompt),
@@ -640,18 +689,37 @@ function PromptDataContent({
 
   return (
     <div className="space-y-3">
-      <Textarea
-        value={thread.prompt}
-        onChange={(e) => {
-          const newPrompt = e.target.value;
-          const newVariables = detectVariables(newPrompt);
-          const updatedVariables = getVariableDefaults(newVariables, thread.variables);
-          onUpdate({ prompt: newPrompt, variables: updatedVariables });
-        }}
-        placeholder="Enter prompt or JSON data..."
-        className="font-mono text-xs h-40"
-        onClick={(e) => e.stopPropagation()}
-      />
+      <div className="relative">
+        <Textarea
+          value={thread.prompt}
+          onChange={(e) => {
+            const newPrompt = e.target.value;
+            const newVariables = detectVariables(newPrompt);
+            const updatedVariables = getVariableDefaults(newVariables, thread.variables);
+            onUpdate({ prompt: newPrompt, variables: updatedVariables });
+          }}
+          placeholder="Enter prompt or JSON data..."
+          className="font-mono text-xs h-40 pr-12"
+          onClick={(e) => e.stopPropagation()}
+        />
+        <Button
+          size="icon"
+          variant="ghost"
+          className="absolute top-2 right-2 h-8 w-8"
+          onClick={(e) => {
+            e.stopPropagation();
+            onCopy(thread.prompt, `prompt-${thread.id}`);
+          }}
+          disabled={!thread.prompt.trim()}
+          title="Copy prompt data"
+        >
+          {copiedStates[`prompt-${thread.id}`] ? (
+            <Check className="h-4 w-4 text-green-600" />
+          ) : (
+            <Copy className="h-4 w-4" />
+          )}
+        </Button>
+      </div>
       <VariableInputs
         variableNames={detectedVariables}
         variables={thread.variables}
@@ -694,7 +762,7 @@ export function PromptDataThreadSection({
       getThreadContent={(thread) => thread.prompt}
       contentType="prompt-data"
       renderContent={(thread, onUpdate) => (
-        <PromptDataContent thread={thread} onUpdate={onUpdate} />
+        <PromptDataContent thread={thread} onUpdate={onUpdate} copiedStates={copiedStates} onCopy={onCopy} />
       )}
     />
   );
