@@ -21,6 +21,7 @@ import {
 import { PROVIDERS } from '@/lib/llm-providers';
 import { detectVariables, getVariableDefaults } from './utils';
 import { VariableInputs } from './VariableInputs';
+import { TitleInputWithAI } from '@/components/prompt-playground/shared/TitleInputWithAI';
 
 // Get all models that support object generation
 const getObjectGenerationModels = () => {
@@ -56,6 +57,8 @@ interface BaseThreadSectionProps<T> {
   copiedStates: Record<string, boolean>;
   onCopy: (text: string, key: string) => void;
   renderContent: (thread: T, onUpdate: (updates: Partial<T>) => void) => ReactNode;
+  getThreadContent?: (thread: T) => string;
+  contentType?: string;
   defaultOpen?: boolean;
 }
 
@@ -73,6 +76,8 @@ function CollapsibleThreadSection<T extends BaseThread>({
   copiedStates: _copiedStates,
   onCopy: _onCopy,
   renderContent,
+  getThreadContent,
+  contentType,
   defaultOpen = true,
 }: BaseThreadSectionProps<T>) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
@@ -120,12 +125,13 @@ function CollapsibleThreadSection<T extends BaseThread>({
               {threads.map((thread) => (
                 <div key={thread.id} className={`border rounded-lg p-4 space-y-3 ${!thread.visible ? 'opacity-50' : ''}`}>
                   <div className="flex items-center justify-between gap-2">
-                    <Input
+                    <TitleInputWithAI
                       value={thread.name}
-                      onChange={(e) => applyUpdate(thread, { name: e.target.value } as Partial<T>)}
-                      className="font-medium flex-1"
+                      onChange={(value) => applyUpdate(thread, { name: value } as Partial<T>)}
+                      content={getThreadContent ? getThreadContent(thread) : ''}
+                      contentType={contentType}
                       placeholder="Thread name"
-                      onClick={(e) => e.stopPropagation()}
+                      className="flex-1"
                     />
                     <div className="flex items-center gap-1">
                       <Button
@@ -206,6 +212,8 @@ export function ModelThreadSection({
       onDuplicateThread={onDuplicateThread}
       copiedStates={copiedStates}
       onCopy={onCopy}
+      getThreadContent={(thread) => `${thread.provider} ${thread.model}`}
+      contentType="model"
       renderContent={(thread, onUpdate) => {
         const providerModels = OBJECT_GENERATION_MODELS.filter(m => m.provider === thread.provider);
         
@@ -438,6 +446,8 @@ export function SchemaThreadSection({
       onDuplicateThread={onDuplicateThread}
       copiedStates={copiedStates}
       onCopy={onCopy}
+      getThreadContent={(thread) => thread.schema}
+      contentType="schema"
       renderContent={(thread, onUpdate) => (
         <SchemaContent thread={thread} onUpdate={onUpdate} />
       )}
@@ -594,6 +604,8 @@ export function SystemPromptThreadSection({
       onDuplicateThread={onDuplicateThread}
       copiedStates={copiedStates}
       onCopy={onCopy}
+      getThreadContent={(thread) => thread.prompt}
+      contentType="system-prompt"
       renderContent={(thread, onUpdate) => (
         <SystemPromptContent thread={thread} onUpdate={onUpdate} />
       )}
@@ -667,6 +679,8 @@ export function PromptDataThreadSection({
       onDuplicateThread={onDuplicateThread}
       copiedStates={copiedStates}
       onCopy={onCopy}
+      getThreadContent={(thread) => thread.prompt}
+      contentType="prompt-data"
       renderContent={(thread, onUpdate) => (
         <PromptDataContent thread={thread} onUpdate={onUpdate} />
       )}

@@ -7,14 +7,17 @@
 
 'use client';
 
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
-import { Loader2, Play, Copy, Check, Clock, Hash, Lock, Unlock } from 'lucide-react';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { Loader2, Play, Copy, Check, Clock, Hash, Lock, Unlock, ArrowUpDown, FileText } from 'lucide-react';
 import { GenerateObjectExecutionThread } from './types';
 import { useAtom } from 'jotai';
 import { snapshotAtomFamily, buildSnapshotFromObjectThread, getGenerateObjectThreadKey } from '@/lib/atoms';
 import { usePersistentLock } from '@/lib/hooks';
+import { countWords } from '../prompt-playground/shared/utils';
 
 interface ResultsGridProps {
   executionThreads: GenerateObjectExecutionThread[];
@@ -23,95 +26,15 @@ interface ResultsGridProps {
   copiedStates: Record<string, boolean>;
 }
 
+type SortOption = 'model' | 'schema' | 'system' | 'prompt' | 'status';
+
 export function ResultsGrid({
   executionThreads,
   onRunThread,
   onCopy,
   copiedStates,
 }: ResultsGridProps) {
-  // Fixed column widths matching the original playground
-  const TEST_CASE_COL_WIDTH = 200; // px for first column
-  const THREAD_COL_WIDTH = 320; // px for each thread column
-
-  // Group threads by unique test cases (schema + prompt combinations)
-  const testCases = new Map<string, { schemaName: string; promptName: string; key: string }>();
-  executionThreads.forEach(thread => {
-    const testCaseKey = `${thread.schemaThread.id}-${thread.promptDataThread.id}`;
-    if (!testCases.has(testCaseKey)) {
-      testCases.set(testCaseKey, {
-        schemaName: thread.schemaThread.name,
-        promptName: thread.promptDataThread.name,
-        key: testCaseKey
-      });
-    }
-  });
-
-  const testCaseArray = Array.from(testCases.values());
-
-  // Table cell component to safely use hooks
-  const ThreadCell = ({ thread }: { thread: GenerateObjectExecutionThread }) => {
-    const pageNs = (typeof window !== 'undefined' ? (window as unknown as { __PAGE_NS__?: string }).__PAGE_NS__ : undefined);
-    const stableKey = getGenerateObjectThreadKey(thread, pageNs);
-    const [snapshot] = useAtom(snapshotAtomFamily(stableKey));
-    const isLocked = !!snapshot;
-    const resp = (isLocked && snapshot?.result) ? snapshot.result : thread.result;
-
-    if (!resp) {
-      return thread.isRunning ? (
-        <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400 text-xs">
-          <Loader2 className="h-3 w-3 animate-spin" /> Generating...
-        </div>
-      ) : (
-        <div className="text-gray-400 dark:text-gray-500 text-xs">Not run</div>
-      );
-    }
-
-    if (resp.error) {
-      return (
-        <div className="text-red-600 dark:text-red-400 text-xs">
-          {resp.validationError ? 'Schema Error' : 'Error: ' + resp.error}
-        </div>
-      );
-    }
-
-    const durationText = resp.duration !== undefined ? `${resp.duration.toFixed(1)}s` : '--';
-    const tokenCount = resp.usage?.totalTokens || ((resp.usage?.inputTokens || 0) + (resp.usage?.outputTokens || 0)) || 0;
-
-    return (
-      <div className="flex flex-col gap-1">
-        <div className="flex items-center justify-between text-[10px] text-gray-500 dark:text-gray-400 whitespace-nowrap">
-          <span className="flex items-center gap-2">
-            <span className="flex items-center gap-1">
-              <Clock className="h-3 w-3" />{durationText}
-            </span>
-            <span className="flex items-center gap-1">
-              <Hash className="h-3 w-3" />{tokenCount}
-            </span>
-          </span>
-          <Button
-            size="icon"
-            variant="ghost"
-            className="h-6 w-6 hover:bg-muted"
-            onClick={(e) => {
-              e.stopPropagation();
-              onCopy(JSON.stringify(resp.object, null, 2), `cell-${thread.id}`);
-            }}
-          >
-            {copiedStates[`cell-${thread.id}`] ? (
-              <Check className="h-3 w-3 text-green-600" />
-            ) : (
-              <Copy className="h-3 w-3" />
-            )}
-          </Button>
-        </div>
-        <div className="max-h-32 overflow-y-auto">
-          <pre className="text-[10px] font-mono whitespace-pre-wrap break-words text-gray-900 dark:text-gray-100">
-            {JSON.stringify(resp.object, null, 2)}
-          </pre>
-        </div>
-      </div>
-    );
-  };
+  const [sortBy, setSortBy] = useState<SortOption>('model');
 
   const copyThread = (thread: GenerateObjectExecutionThread) => {
     const ns = (typeof window !== 'undefined' ? (window as unknown as { __PAGE_NS__?: string }).__PAGE_NS__ : undefined);
@@ -133,27 +56,30 @@ export function ResultsGrid({
   };
 
   const copyAll = () => {
-    const headers = ['Test Case', ...executionThreads.map(t => t.name)];
-    const rows: string[][] = [];
-    
-    testCaseArray.forEach(testCase => {
-      const row = [`${testCase.schemaName} / ${testCase.promptName}`];
-      executionThreads.forEach(thread => {
-        const matchesTestCase = 
-          thread.schemaThread.name === testCase.schemaName && 
-          thread.promptDataThread.name === testCase.promptName;
-        
-        if (matchesTestCase && thread.result?.object) {
-          row.push(JSON.stringify(thread.result.object));
-        } else {
-          row.push('');
+    // Copy all thread results as JSON array
+    const allResults = executionThreads.map(thread => {
+      const ns = (typeof window !== 'undefined' ? (window as unknown as { __PAGE_NS__?: string }).__PAGE_NS__ : undefined);
+      const key = getGenerateObjectThreadKey(thread, ns);
+      const snapRaw = (typeof window !== 'undefined') ? localStorage.getItem(`snapshot:${ns || 'root'}:go-snap:${key}`) : null;
+      const snap = snapRaw ? JSON.parse(snapRaw) : null;
+      const effective = snap?.result ? snap : { result: thread.result };
+
+      return {
+        thread: thread.name,
+        model: thread.modelThread.name,
+        schema: thread.schemaThread.name,
+        system: thread.systemPromptThread.name,
+        prompt: thread.promptDataThread.name,
+        result: effective?.result?.object,
+        metadata: {
+          duration: effective?.result?.duration,
+          tokens: effective?.result?.usage,
+          error: effective?.result?.error
         }
-      });
-      rows.push(row);
+      };
     });
-    
-    const csv = [headers.join(','), ...rows.map(r => r.map(cell => `"${cell.replace(/"/g, '""')}"`).join(','))].join('\n');
-    onCopy(csv, 'copy-all');
+
+    onCopy(JSON.stringify(allResults, null, 2), 'copy-all');
   };
 
   const handleRunAllThreads = async () => {
@@ -170,6 +96,31 @@ export function ResultsGrid({
   const anyThreadRunning = executionThreads.some(t => t.isRunning);
   const visibleThreads = executionThreads.filter(t => t.visible);
 
+  // Sort threads based on selected option
+  const sortedThreads = [...executionThreads].sort((a, b) => {
+    switch (sortBy) {
+      case 'model':
+        return a.modelThread.name.localeCompare(b.modelThread.name);
+      case 'schema':
+        return a.schemaThread.name.localeCompare(b.schemaThread.name);
+      case 'system':
+        return a.systemPromptThread.name.localeCompare(b.systemPromptThread.name);
+      case 'prompt':
+        return a.promptDataThread.name.localeCompare(b.promptDataThread.name);
+      case 'status':
+        // Sort by: running > has result > error > not run
+        const getStatusPriority = (thread: GenerateObjectExecutionThread) => {
+          if (thread.isRunning) return 0;
+          if (thread.result?.object) return 1;
+          if (thread.result?.error) return 2;
+          return 3;
+        };
+        return getStatusPriority(a) - getStatusPriority(b);
+      default:
+        return 0; // Keep original order
+    }
+  });
+
   if (executionThreads.length === 0) {
     return (
       <div className="text-center text-gray-500 py-8">
@@ -182,7 +133,7 @@ export function ResultsGrid({
   if (executionThreads.length === 1) {
     const thread = executionThreads[0];
     return (
-      <Card className="p-4">
+      <Card className="gap-0 py-0">
         <div className="flex items-center justify-between mb-4">
           <div>
             <h4 className="font-medium text-sm">{thread.name}</h4>
@@ -244,12 +195,51 @@ export function ResultsGrid({
     );
   }
 
-  // Grid view for multiple threads
+  // Grid view for multiple threads - Card-based layout
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <div className="text-sm text-gray-600 dark:text-gray-400">
-          {visibleThreads.length} threads × {testCaseArray.length} test cases
+    <div className="space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center gap-3">
+          <div className="text-sm text-gray-600 dark:text-gray-400">
+            {visibleThreads.length} threads
+          </div>
+          <div className="flex items-center gap-2">
+            <ArrowUpDown className="h-4 w-4 text-gray-500" />
+            <span className="text-sm text-gray-600 dark:text-gray-400">Sort by:</span>
+            <ToggleGroup type="single" value={sortBy} onValueChange={(value) => value && setSortBy(value as SortOption)} size="sm" variant="outline">
+              <ToggleGroupItem
+                value="model"
+                aria-label="Sort by model"
+                className={sortBy === 'model' ? 'bg-blue-100 dark:bg-blue-900 text-blue-900 dark:text-blue-100 hover:bg-blue-200 dark:hover:bg-blue-800 hover:text-blue-900 dark:hover:text-blue-100 data-[state=on]:bg-blue-100 dark:data-[state=on]:bg-blue-900 data-[state=on]:text-blue-900 dark:data-[state=on]:text-blue-100' : ''}
+              >
+                Model
+              </ToggleGroupItem>
+              <ToggleGroupItem
+                value="schema"
+                aria-label="Sort by schema"
+                className={sortBy === 'schema' ? 'bg-green-100 dark:bg-green-900 text-green-900 dark:text-green-100 hover:bg-green-200 dark:hover:bg-green-800 hover:text-green-900 dark:hover:text-green-100 data-[state=on]:bg-green-100 dark:data-[state=on]:bg-green-900 data-[state=on]:text-green-900 dark:data-[state=on]:text-green-100' : ''}
+              >
+                Schema
+              </ToggleGroupItem>
+              <ToggleGroupItem
+                value="system"
+                aria-label="Sort by system prompt"
+                className={sortBy === 'system' ? 'bg-yellow-100 dark:bg-yellow-900 text-yellow-900 dark:text-yellow-100 hover:bg-yellow-200 dark:hover:bg-yellow-800 hover:text-yellow-900 dark:hover:text-yellow-100 data-[state=on]:bg-yellow-100 dark:data-[state=on]:bg-yellow-900 data-[state=on]:text-yellow-900 dark:data-[state=on]:text-yellow-100' : ''}
+              >
+                System
+              </ToggleGroupItem>
+              <ToggleGroupItem
+                value="prompt"
+                aria-label="Sort by prompt"
+                className={sortBy === 'prompt' ? 'bg-orange-100 dark:bg-orange-900 text-orange-900 dark:text-orange-100 hover:bg-orange-200 dark:hover:bg-orange-800 hover:text-orange-900 dark:hover:text-orange-100 data-[state=on]:bg-orange-100 dark:data-[state=on]:bg-orange-900 data-[state=on]:text-orange-900 dark:data-[state=on]:text-orange-100' : ''}
+              >
+                Prompt
+              </ToggleGroupItem>
+              <ToggleGroupItem value="status" aria-label="Sort by status">
+                Status
+              </ToggleGroupItem>
+            </ToggleGroup>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <Button
@@ -289,103 +279,160 @@ export function ResultsGrid({
           </Button>
         </div>
       </div>
-      
-      <ScrollArea className="w-full border rounded-lg bg-white dark:bg-gray-900">
-        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-          <thead className="bg-gray-50 dark:bg-gray-800 sticky top-0 z-10">
-            <tr>
-              <th
-                className="sticky left-0 bg-gray-50 dark:bg-gray-800 px-4 py-2 text-left text-sm font-medium text-gray-700 dark:text-gray-300 z-20" 
-                style={{ width: TEST_CASE_COL_WIDTH, minWidth: TEST_CASE_COL_WIDTH }}
-              >
-                Test Case
-              </th>
-              {executionThreads.map((thread) => (
-                <th
-                  key={thread.id}
-                  style={{
-                    width: THREAD_COL_WIDTH,
-                    minWidth: THREAD_COL_WIDTH,
-                  }}
-                  className="px-4 py-2 text-left text-sm font-medium text-gray-900 dark:text-gray-100 border-l border-gray-200 dark:border-gray-700"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="truncate max-w-[200px]" title={thread.name}>
-                      {thread.modelThread.name} × {thread.systemPromptThread.name}
-                    </span>
-                    <div className="flex items-center gap-1">
-                      {/* Lock toggle */}
-                      <LockToggle thread={thread} />
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => onRunThread(thread.id)}
-                        disabled={thread.isRunning}
-                        className="h-6 w-6"
-                      >
-                        {thread.isRunning ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Play className="h-4 w-4" />
-                        )}
-                      </Button>
-                      <Button 
-                        size="icon" 
-                        variant="ghost" 
-                        className="h-6 w-6 hover:bg-muted" 
-                        onClick={() => copyThread(thread)}
-                      >
-                        {copiedStates[`thread-${thread.id}`] ? (
-                          <Check className="h-4 w-4 text-green-600" />
-                        ) : (
-                          <Copy className="h-4 w-4" />
-                        )}
-                      </Button>
-                    </div>
-                  </div>
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-200 dark:divide-gray-700 bg-white dark:bg-gray-900">
-            {testCaseArray.map((testCase) => (
-              <tr key={testCase.key}>
-                <td
-                  className="sticky left-0 bg-white dark:bg-gray-900 whitespace-nowrap px-4 py-2 text-sm font-medium text-gray-900 dark:text-gray-100 z-10" 
-                  style={{ width: TEST_CASE_COL_WIDTH, minWidth: TEST_CASE_COL_WIDTH }}
-                >
-                  <div className="space-y-1">
-                    <div className="text-xs font-semibold">{testCase.schemaName}</div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400">{testCase.promptName}</div>
-                  </div>
-                </td>
-                {executionThreads.map((thread) => {
-                  const matchesTestCase = 
-                    thread.schemaThread.name === testCase.schemaName && 
-                    thread.promptDataThread.name === testCase.promptName;
-                  
-                  return (
-                    <td
-                      key={thread.id}
-                      style={{
-                        width: THREAD_COL_WIDTH,
-                        minWidth: THREAD_COL_WIDTH,
-                      }}
-                      className="whitespace-normal px-4 py-2 text-sm text-gray-500 dark:text-gray-400 align-top border-l border-gray-200 dark:border-gray-700"
-                    >
-                      {matchesTestCase ? <ThreadCell thread={thread} /> : (
-                        <div className="text-gray-300 dark:text-gray-500 text-xs">N/A</div>
-                      )}
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <ScrollBar orientation="horizontal" />
-      </ScrollArea>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        {sortedThreads.map((thread) => (
+          <ThreadCard
+            key={thread.id}
+            thread={thread}
+            sortBy={sortBy}
+            onRunThread={onRunThread}
+            onCopy={onCopy}
+            copiedStates={copiedStates}
+          />
+        ))}
+      </div>
     </div>
+  );
+}
+
+interface ThreadCardProps {
+  thread: GenerateObjectExecutionThread;
+  sortBy: SortOption;
+  onRunThread: (threadId: string) => void;
+  onCopy: (text: string, key: string) => void;
+  copiedStates: Record<string, boolean>;
+}
+
+function ThreadCard({ thread, sortBy, onRunThread, onCopy, copiedStates }: ThreadCardProps) {
+  const pageNs = (typeof window !== 'undefined' ? (window as unknown as { __PAGE_NS__?: string }).__PAGE_NS__ : undefined);
+  const stableKey = getGenerateObjectThreadKey(thread, pageNs);
+  const [snapshot] = useAtom(snapshotAtomFamily(stableKey));
+  const isLocked = !!snapshot;
+  const result = (isLocked && snapshot?.result) ? snapshot.result : thread.result;
+
+  // Determine field order based on sort
+  type FieldInfo = { name: string; color: string; key: string };
+
+  const getFieldsInOrder = (): FieldInfo[] => {
+    const fields = {
+      model: { name: thread.modelThread.name, color: 'bg-blue-500', key: 'model' },
+      schema: { name: thread.schemaThread.name, color: 'bg-green-500', key: 'schema' },
+      system: { name: thread.systemPromptThread.name, color: 'bg-yellow-500', key: 'system' },
+      prompt: { name: thread.promptDataThread.name, color: 'bg-orange-500', key: 'prompt' }
+    };
+
+    switch (sortBy) {
+      case 'schema':
+        return [fields.schema, fields.model, fields.system, fields.prompt];
+      case 'system':
+        return [fields.system, fields.model, fields.schema, fields.prompt];
+      case 'prompt':
+        return [fields.prompt, fields.model, fields.schema, fields.system];
+      case 'model':
+      case 'status':
+      default:
+        return [fields.model, fields.schema, fields.system, fields.prompt];
+    }
+  };
+
+  const fieldsInOrder = getFieldsInOrder();
+  const [titleField, ...subtitleFields] = fieldsInOrder;
+
+  return (
+    <Card className="h-full flex flex-col gap-0 py-0">
+      {/* title and subtitle */}
+      <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+        <div className="flex items-start justify-between gap-2 mb-0">
+          <div className="flex-1 min-w-0">
+            <h4 className="font-medium text-sm truncate" title={titleField.name}>
+              {titleField.name}
+            </h4>
+            <div className="text-xs text-gray-500 dark:text-gray-400 mt-2 space-y-1">
+              {subtitleFields.map((field) => (
+                <div key={field.key} className="flex items-center gap-2 truncate" title={field.name}>
+                  <div className={`w-3 h-3 ${field.color} rounded-full flex-shrink-0`}></div>
+                  <span className="truncate">{field.name}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="flex flex-col gap-1">
+            <LockToggle thread={thread} />
+            <Button
+              size="icon"
+              variant="outline"
+              onClick={() => onRunThread(thread.id)}
+              disabled={thread.isRunning}
+              className="h-8 w-8"
+            >
+              {thread.isRunning ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Play className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* result */}
+      <div className="flex-1 p-4 overflow-hidden">
+        {!result ? (
+          thread.isRunning ? (
+            <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400 text-sm">
+              <Loader2 className="h-4 w-4 animate-spin" /> Generating...
+            </div>
+          ) : (
+            <div className="text-gray-400 dark:text-gray-500 text-sm">Not run yet</div>
+          )
+        ) : result.error ? (
+          <div className="text-red-600 dark:text-red-400 text-sm">
+            <div className="font-semibold mb-1">
+              {result.validationError ? 'Schema Validation Error' : 'Error'}
+            </div>
+            <div className="text-xs">{result.error}</div>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+              <span className="flex items-center gap-3">
+                <span className="flex items-center gap-1">
+                  <Clock className="h-3 w-3" />
+                  {result.duration !== undefined ? `${result.duration.toFixed(1)}s` : '--'}
+                </span>
+                <span className="flex items-center gap-1">
+                  <Hash className="h-3 w-3" />
+                  {result.usage?.totalTokens || ((result.usage?.inputTokens || 0) + (result.usage?.outputTokens || 0)) || 0}
+                </span>
+                {/* add word count - count words in the result.object */}
+                <span className="flex items-center gap-1">
+                  <FileText className="h-3 w-3" />
+                  {countWords(JSON.stringify(result.object, null, 2)) || 0}
+                </span>
+              </span>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-6 w-6 hover:bg-muted"
+                onClick={() => onCopy(JSON.stringify(result.object, null, 2), `card-${thread.id}`)}
+              >
+                {copiedStates[`card-${thread.id}`] ? (
+                  <Check className="h-3 w-3 text-green-600" />
+                ) : (
+                  <Copy className="h-3 w-3" />
+                )}
+              </Button>
+            </div>
+            <ScrollArea className="h-auto max-h-64">
+              <pre className="text-xs font-mono whitespace-pre-wrap break-words text-gray-900 dark:text-gray-100">
+                {JSON.stringify(result.object, null, 2)}
+              </pre>
+            </ScrollArea>
+          </div>
+        )}
+      </div>
+    </Card>
   );
 }
 

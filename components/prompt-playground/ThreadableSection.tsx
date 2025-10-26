@@ -10,12 +10,12 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
-import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus, Copy, Trash2, ChevronDown, Hash, FileText, Check } from 'lucide-react';
 import {
   MODEL_PROVIDER_MAP,
 } from './shared/types';
+import { TitleInputWithAI } from './shared/TitleInputWithAI';
 import type { 
   ModelThread, 
   DataThread, 
@@ -130,11 +130,13 @@ export function ModelThreadSection({
               {threads.map((thread) => (
                 <div key={thread.id} className="border rounded-lg p-4 space-y-3">
                   <div className="flex items-center justify-between">
-                    <Input
+                    <TitleInputWithAI
                       value={thread.name}
-                      onChange={(e) => onUpdateThread(thread.id, { name: e.target.value })}
-                      className="font-medium"
+                      onChange={(value) => onUpdateThread(thread.id, { name: value })}
+                      content={`${thread.provider} ${thread.model}`}
+                      contentType="model"
                       placeholder="Thread name"
+                      className="flex-1 mr-2"
                     />
                     <div className="flex items-center gap-1">
                       <Button
