@@ -18,7 +18,7 @@
 import { useState, useEffect, use, useRef } from 'react';
 import { useAtom } from 'jotai';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, GitBranch, Brain, Code, Cpu, FileJson, LayoutGrid, ArrowUpToLine, ArrowRightToLine } from 'lucide-react';
+import { Loader2, GitBranch, Brain, Code, Cpu, FileJson, LayoutGrid } from 'lucide-react';
 import { getGenerateObjectThreadKey, buildSnapshotFromThread } from '@/lib/atoms';
 import { 
   configAtomFamily
@@ -41,7 +41,7 @@ import {
 import { ResultsGrid } from '@/components/generate-object-playground/ResultsGrid';
 import { generateId } from '@/components/prompt-playground/shared/utils';
 import { replaceVariables } from '@/components/generate-object-playground/utils';
-import { FloatingNav } from '@/components/generate-object-playground/FloatingNav';
+import { FloatingNav, useFloatingNav, type NavSection } from '@/components/shared/floating-nav';
 // Module hydration uses localStorage directly (no hooks needed here)
 
 // Type definitions
@@ -77,14 +77,6 @@ export default function GenerateObjectPlaygroundPage({
   // All hooks MUST be declared before any conditional logic or returns
   const [mounted, setMounted] = useState(false);
 
-  // Navigation state
-  type NavMode = 'horizontal' | 'vertical';
-  const [navMode, setNavMode] = useState<NavMode>('vertical'); // Default to vertical for floating nav
-  const [showFloatingNav, setShowFloatingNav] = useState(false); // Only show when scrolled past inline bar
-  const [isExiting, setIsExiting] = useState(false); // Track exit animation
-  const [isToggling, setIsToggling] = useState(false); // Track toggle animation
-  const [activeSection, setActiveSection] = useState<SectionKey | null>('models');
-
   // Refs for scrolling to sections
   const modelSectionRef = useRef<HTMLDivElement>(null);
   const schemaSectionRef = useRef<HTMLDivElement>(null);
@@ -92,6 +84,21 @@ export default function GenerateObjectPlaygroundPage({
   const promptSectionRef = useRef<HTMLDivElement>(null);
   const resultsSectionRef = useRef<HTMLDivElement>(null);
   const horizontalNavRef = useRef<HTMLDivElement>(null);
+
+  // Navigation state (using custom hook)
+  const {
+    navMode,
+    showFloatingNav,
+    isExiting,
+    isToggling,
+    activeSection,
+    setActiveSection,
+    handleToggleNav,
+  } = useFloatingNav({
+    horizontalNavRef,
+    sectionKeys: ['models', 'schemas', 'system', 'prompts', 'results'],
+    mounted,
+  });
 
   // Copy management
   const [copiedStates, setCopiedStates] = useState<Record<string, boolean>>({});
@@ -323,78 +330,7 @@ export default function GenerateObjectPlaygroundPage({
     setConfig
   ]);
 
-  // IntersectionObserver for nav visibility (show floating nav when inline bar scrolls out of view)
-  useEffect(() => {
-    if (!mounted || !horizontalNavRef.current) return;
-
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (!entry.isIntersecting && !showFloatingNav) {
-          // Show floating nav when inline bar scrolls out of view
-          setIsExiting(false);
-          setShowFloatingNav(true);
-        } else if (entry.isIntersecting && showFloatingNav) {
-          // Start exit animation
-          setIsExiting(true);
-          // Wait for animation to complete before hiding
-          setTimeout(() => {
-            setShowFloatingNav(false);
-            setIsExiting(false);
-          }, 400); // Match animation duration
-        }
-      },
-      { threshold: 0, rootMargin: '0px' }
-    );
-
-    observer.observe(horizontalNavRef.current);
-
-    return () => {
-      observer.disconnect();
-    };
-  }, [mounted, showFloatingNav]);
-
-  // Dual-sentinel IntersectionObserver for active section tracking
-  useEffect(() => {
-    if (!mounted) return;
-
-    const sectionOrder: SectionKey[] = ['models', 'schemas', 'system', 'prompts', 'results'];
-
-    const startObserver = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          const key = entry.target.getAttribute('data-section') as SectionKey;
-          if (key) setActiveSection(key);
-        }
-      },
-      { rootMargin: '-1px 0px 0px 0px', threshold: 0 }
-    );
-
-    const endObserver = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          const key = entry.target.getAttribute('data-section') as SectionKey;
-          if (!key) return;
-          const idx = sectionOrder.indexOf(key);
-          const next = sectionOrder[idx + 1] || key;
-          setActiveSection(next as SectionKey);
-        }
-      },
-      { rootMargin: '0px 0px -50% 0px', threshold: 0 }
-    );
-
-    const startSentinels = document.querySelectorAll<HTMLSpanElement>('.scroll-sentinel-start');
-    const endSentinels = document.querySelectorAll<HTMLSpanElement>('.scroll-sentinel-end');
-    startSentinels.forEach((s) => startObserver.observe(s));
-    endSentinels.forEach((s) => endObserver.observe(s));
-
-    return () => {
-      window.removeEventListener('resize', () => setActiveSection('models'));
-      startSentinels.forEach((s) => startObserver.unobserve(s));
-      endSentinels.forEach((s) => endObserver.unobserve(s));
-      startObserver.disconnect();
-      endObserver.disconnect();
-    };
-  }, [mounted]);
+  // Navigation observers are now handled by the useFloatingNav hook
 
   const handleUpdateConfig = (updates: Partial<GenerateObjectConfig>) => {
     console.log('handleUpdateConfig called with updates:', updates);
@@ -418,30 +354,18 @@ export default function GenerateObjectPlaygroundPage({
   };
 
   // Scroll to section
-  const scrollToSection = (section: SectionKey) => {
-    const sectionRefs = {
+  const scrollToSection = (sectionKey: string) => {
+    const sectionRefs: Record<string, React.RefObject<HTMLDivElement>> = {
       models: modelSectionRef,
       schemas: schemaSectionRef,
       system: systemSectionRef,
       prompts: promptSectionRef,
       results: resultsSectionRef,
     };
-    sectionRefs[section].current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    sectionRefs[sectionKey]?.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
-  // Toggle navigation layout (vertical <-> horizontal)
-  const handleToggleNav = () => {
-    // Start exit animation
-    setIsToggling(true);
-
-    // Wait for exit animation to complete, then switch mode
-    setTimeout(() => {
-      setNavMode(prevMode => prevMode === 'horizontal' ? 'vertical' : 'horizontal');
-      setIsToggling(false);
-    }, 400); // Match animation duration
-  };
-
-  // Utility functions for section styling
+  // Utility functions for section styling (kept for inline horizontal nav)
   const getSectionColor = (section: SectionKey) => {
     const colors = {
       models: 'text-blue-600',
@@ -451,17 +375,6 @@ export default function GenerateObjectPlaygroundPage({
       results: 'text-purple-600'
     };
     return colors[section];
-  };
-
-  const getSectionShadow = (section: SectionKey) => {
-    const shadows = {
-      models: 'shadow-[0_0_12px_rgba(59,130,246,0.5)]',
-      schemas: 'shadow-[0_0_12px_rgba(34,197,94,0.5)]',
-      system: 'shadow-[0_0_12px_rgba(234,179,8,0.5)]',
-      prompts: 'shadow-[0_0_12px_rgba(249,115,22,0.5)]',
-      results: 'shadow-[0_0_12px_rgba(168,85,247,0.5)]'
-    };
-    return shadows[section];
   };
 
   const getSectionHoverBg = (section: SectionKey) => {
@@ -765,6 +678,70 @@ export default function GenerateObjectPlaygroundPage({
   // Calculate total combinations (with null check)
   const totalCombinations = config?.executionThreads?.filter(t => t.visible).length || 0;
 
+  // Define navigation sections
+  const navSections: NavSection[] = [
+    {
+      key: 'models',
+      label: 'Models',
+      icon: Brain,
+      count: config?.modelThreads?.length || 0,
+      color: {
+        text: 'text-blue-600',
+        glow: 'rgba(59,130,246,0.5)',
+        hoverBg: 'hover:bg-blue-100 dark:hover:bg-blue-900/30',
+      },
+      ref: modelSectionRef,
+    },
+    {
+      key: 'schemas',
+      label: 'Schemas',
+      icon: Code,
+      count: config?.schemaThreads?.length || 0,
+      color: {
+        text: 'text-green-600',
+        glow: 'rgba(34,197,94,0.5)',
+        hoverBg: 'hover:bg-green-100 dark:hover:bg-green-900/30',
+      },
+      ref: schemaSectionRef,
+    },
+    {
+      key: 'system',
+      label: 'System',
+      icon: Cpu,
+      count: config?.systemPromptThreads?.length || 0,
+      color: {
+        text: 'text-yellow-600',
+        glow: 'rgba(234,179,8,0.5)',
+        hoverBg: 'hover:bg-yellow-100 dark:hover:bg-yellow-900/30',
+      },
+      ref: systemSectionRef,
+    },
+    {
+      key: 'prompts',
+      label: 'Prompts',
+      icon: FileJson,
+      count: config?.promptDataThreads?.length || 0,
+      color: {
+        text: 'text-orange-600',
+        glow: 'rgba(249,115,22,0.5)',
+        hoverBg: 'hover:bg-orange-100 dark:hover:bg-orange-900/30',
+      },
+      ref: promptSectionRef,
+    },
+    {
+      key: 'results',
+      label: 'Output',
+      icon: LayoutGrid,
+      count: totalCombinations,
+      color: {
+        text: 'text-purple-600',
+        glow: 'rgba(168,85,247,0.5)',
+        hoverBg: 'hover:bg-purple-100 dark:hover:bg-purple-900/30',
+      },
+      ref: resultsSectionRef,
+    },
+  ];
+
   // Show loading until mounted to prevent hydration issues
   if (!mounted || !config) {
     return (
@@ -878,15 +855,14 @@ export default function GenerateObjectPlaygroundPage({
       </div>
 
       <FloatingNav
+        sections={navSections}
         showFloatingNav={showFloatingNav}
         navMode={navMode}
         isExiting={isExiting}
         isToggling={isToggling}
         activeSection={activeSection}
-        config={config}
-        totalCombinations={totalCombinations}
-        handleToggleNav={handleToggleNav}
-        scrollToSection={scrollToSection}
+        onToggleNav={handleToggleNav}
+        onScrollToSection={scrollToSection}
       />
 
       {/* Pipeline Threading */}

@@ -14,11 +14,11 @@
 
 'use client';
 
-import { useState, useEffect, use } from 'react';
+import { useState, useEffect, use, useRef } from 'react';
 import { useAtom } from 'jotai';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Loader2, Play, GitBranch } from 'lucide-react';
+import { Loader2, Play, GitBranch, Brain, Cpu, FileJson, LayoutGrid } from 'lucide-react';
 import { getGenerateTextThreadKey, buildSnapshotFromThread } from '@/lib/atoms';
 import { 
   configAtomFamily
@@ -39,6 +39,7 @@ import {
 import { TextResultsGrid } from '@/components/generate-text-playground/ResultsGrid';
 import { generateId } from '@/components/prompt-playground/shared/utils';
 import { replaceVariables } from '@/components/generate-object-playground/utils';
+import { FloatingNav, useFloatingNav, type NavSection } from '@/components/shared/floating-nav';
 // Module hydration uses localStorage directly (no hooks needed here)
 
 // Default values
@@ -60,7 +61,29 @@ export default function GenerateTextPlaygroundPage({
   }
   
   const [mounted, setMounted] = useState(false);
-  
+
+  // Refs for scrolling to sections
+  const modelSectionRef = useRef<HTMLDivElement>(null);
+  const systemSectionRef = useRef<HTMLDivElement>(null);
+  const promptSectionRef = useRef<HTMLDivElement>(null);
+  const resultsSectionRef = useRef<HTMLDivElement>(null);
+  const horizontalNavRef = useRef<HTMLDivElement>(null);
+
+  // Navigation state (using custom hook)
+  const {
+    navMode,
+    showFloatingNav,
+    isExiting,
+    isToggling,
+    activeSection,
+    setActiveSection,
+    handleToggleNav,
+  } = useFloatingNav({
+    horizontalNavRef,
+    sectionKeys: ['models', 'system', 'prompts', 'results'],
+    mounted,
+  });
+
   // Chat-specific config atom - unique per chatId
   const configAtom = configAtomFamily(chatId);
   const [config, setConfig] = useAtom(configAtom);
@@ -531,6 +554,69 @@ export default function GenerateTextPlaygroundPage({
   const totalCombinations = config?.executionThreads?.filter(t => t.visible).length || 0;
   const anyThreadRunning = config?.executionThreads?.some(thread => thread.isRunning) || false;
 
+  // Scroll to section
+  const scrollToSection = (sectionKey: string) => {
+    const sectionRefs: Record<string, React.RefObject<HTMLDivElement>> = {
+      models: modelSectionRef,
+      system: systemSectionRef,
+      prompts: promptSectionRef,
+      results: resultsSectionRef,
+    };
+    sectionRefs[sectionKey]?.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  // Define navigation sections (after totalCombinations is calculated)
+  const navSections: NavSection[] = [
+    {
+      key: 'models',
+      label: 'Models',
+      icon: Brain,
+      count: config?.modelThreads?.length || 0,
+      color: {
+        text: 'text-blue-600',
+        glow: 'rgba(59,130,246,0.5)',
+        hoverBg: 'hover:bg-blue-100 dark:hover:bg-blue-900/30',
+      },
+      ref: modelSectionRef,
+    },
+    {
+      key: 'system',
+      label: 'System',
+      icon: Cpu,
+      count: config?.systemPromptThreads?.length || 0,
+      color: {
+        text: 'text-yellow-600',
+        glow: 'rgba(234,179,8,0.5)',
+        hoverBg: 'hover:bg-yellow-100 dark:hover:bg-yellow-900/30',
+      },
+      ref: systemSectionRef,
+    },
+    {
+      key: 'prompts',
+      label: 'Prompts',
+      icon: FileJson,
+      count: config?.promptDataThreads?.length || 0,
+      color: {
+        text: 'text-orange-600',
+        glow: 'rgba(249,115,22,0.5)',
+        hoverBg: 'hover:bg-orange-100 dark:hover:bg-orange-900/30',
+      },
+      ref: promptSectionRef,
+    },
+    {
+      key: 'results',
+      label: 'Output',
+      icon: LayoutGrid,
+      count: totalCombinations,
+      color: {
+        text: 'text-purple-600',
+        glow: 'rgba(168,85,247,0.5)',
+        hoverBg: 'hover:bg-purple-100 dark:hover:bg-purple-900/30',
+      },
+      ref: resultsSectionRef,
+    },
+  ];
+
   // Show loading until mounted to prevent hydration issues
   if (!mounted || !config) {
     return (
@@ -596,32 +682,87 @@ export default function GenerateTextPlaygroundPage({
         </CardContent>
       </Card>
 
+      {/* Horizontal Navigation */}
+      <div
+        ref={horizontalNavRef}
+        className="mx-auto w-fit transition-all duration-300"
+      >
+        <div className="flex items-center gap-2">
+          <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-slate-800 dark:to-slate-900 border-2 border-dashed border-gray-300 dark:border-slate-700 rounded-full shadow-lg backdrop-blur-sm bg-opacity-95 dark:bg-opacity-95">
+            <div className="px-6 py-2">
+              <div className="flex items-center justify-center gap-1 text-sm font-medium text-gray-700 dark:text-gray-300">
+                {navSections.map((section, index) => {
+                  const Icon = section.icon;
+                  const isLast = index === navSections.length - 1;
+
+                  return (
+                    <div key={section.key} className="flex items-center gap-1">
+                      <button
+                        onClick={() => scrollToSection(section.key)}
+                        className={`flex items-center gap-2 px-3 py-2 rounded-md transition-all cursor-pointer whitespace-nowrap ${section.color.hoverBg}`}
+                        title={`Jump to ${section.label} section`}
+                      >
+                        <Icon className={`h-4 w-4 ${section.color.text}`} />
+                        <span className="hidden sm:inline">{section.label} ({section.count})</span>
+                        <span className="sm:hidden">({section.count})</span>
+                      </button>
+                      {!isLast && <div className="text-gray-400">➜</div>}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <FloatingNav
+        sections={navSections}
+        showFloatingNav={showFloatingNav}
+        navMode={navMode}
+        isExiting={isExiting}
+        isToggling={isToggling}
+        activeSection={activeSection}
+        onToggleNav={handleToggleNav}
+        onScrollToSection={scrollToSection}
+      />
+
       {/* Pipeline Threading */}
       <div className="space-y-6 max-w-4xl mx-auto">
         {/* Model Threads */}
-        <TextModelThreadSection
-          threads={config.modelThreads}
-          onAddThread={handleAddModelThread}
-          onUpdateThread={handleUpdateModelThread}
-          onDeleteThread={handleDeleteModelThread}
-          onDuplicateThread={handleDuplicateModelThread}
-          copiedStates={copiedStates}
-          onCopy={handleCopy}
-        />
+        <div ref={modelSectionRef} data-section="models">
+          <span className="scroll-sentinel-start" data-section="models" />
+          <TextModelThreadSection
+            threads={config.modelThreads}
+            onAddThread={handleAddModelThread}
+            onUpdateThread={handleUpdateModelThread}
+            onDeleteThread={handleDeleteModelThread}
+            onDuplicateThread={handleDuplicateModelThread}
+            copiedStates={copiedStates}
+            onCopy={handleCopy}
+          />
+          <span className="scroll-sentinel-end" data-section="models" />
+        </div>
 
         {/* System Prompt Threads */}
-        <TextSystemPromptThreadSection
-          threads={config.systemPromptThreads}
-          onAddThread={handleAddSystemPromptThread}
-          onUpdateThread={handleUpdateSystemPromptThread}
-          onDeleteThread={handleDeleteSystemPromptThread}
-          onDuplicateThread={handleDuplicateSystemPromptThread}
-          copiedStates={copiedStates}
-          onCopy={handleCopy}
-        />
+        <div ref={systemSectionRef} data-section="system">
+          <span className="scroll-sentinel-start" data-section="system" />
+          <TextSystemPromptThreadSection
+            threads={config.systemPromptThreads}
+            onAddThread={handleAddSystemPromptThread}
+            onUpdateThread={handleUpdateSystemPromptThread}
+            onDeleteThread={handleDeleteSystemPromptThread}
+            onDuplicateThread={handleDuplicateSystemPromptThread}
+            copiedStates={copiedStates}
+            onCopy={handleCopy}
+          />
+          <span className="scroll-sentinel-end" data-section="system" />
+        </div>
 
         {/* Prompt Data Threads */}
-        <TextPromptDataThreadSection
+        <div ref={promptSectionRef} data-section="prompts">
+          <span className="scroll-sentinel-start" data-section="prompts" />
+          <TextPromptDataThreadSection
           threads={config.promptDataThreads}
           onAddThread={handleAddPromptDataThread}
           onUpdateThread={handleUpdatePromptDataThread}
@@ -630,25 +771,31 @@ export default function GenerateTextPlaygroundPage({
           copiedStates={copiedStates}
           onCopy={handleCopy}
         />
+          <span className="scroll-sentinel-end" data-section="prompts" />
+        </div>
       </div>
 
       {/* Results Grid */}
-      <Card className="border-purple-200 border-2">
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
-            <CardTitle>Results ({totalCombinations} combinations)</CardTitle>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <TextResultsGrid
-            executionThreads={config.executionThreads}
-            onRunThread={handleRunExecutionThread}
-            onCopy={handleCopy}
-            copiedStates={copiedStates}
-          />
-        </CardContent>
-      </Card>
+      <div ref={resultsSectionRef} data-section="results">
+        <span className="scroll-sentinel-start" data-section="results" />
+        <Card className="border-purple-200 border-2">
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
+              <CardTitle>Results ({totalCombinations} combinations)</CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <TextResultsGrid
+              executionThreads={config.executionThreads}
+              onRunThread={handleRunExecutionThread}
+              onCopy={handleCopy}
+              copiedStates={copiedStates}
+            />
+          </CardContent>
+        </Card>
+        <span className="scroll-sentinel-end" data-section="results" />
+      </div>
 
       {/* Floating Run Button */}
       <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-50">
