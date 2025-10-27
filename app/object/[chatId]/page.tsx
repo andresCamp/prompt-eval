@@ -18,7 +18,7 @@
 import { useState, useEffect, use, useRef } from 'react';
 import { useAtom } from 'jotai';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, GitBranch, Brain, Code, Cpu, FileJson, LayoutGrid } from 'lucide-react';
+import { Loader2, GitBranch, Brain, Code, Cpu, FileJson, LayoutGrid, ArrowUpToLine, ArrowRightToLine } from 'lucide-react';
 import { getGenerateObjectThreadKey, buildSnapshotFromThread } from '@/lib/atoms';
 import { 
   configAtomFamily
@@ -41,7 +41,11 @@ import {
 import { ResultsGrid } from '@/components/generate-object-playground/ResultsGrid';
 import { generateId } from '@/components/prompt-playground/shared/utils';
 import { replaceVariables } from '@/components/generate-object-playground/utils';
+import { FloatingNav } from '@/components/generate-object-playground/FloatingNav';
 // Module hydration uses localStorage directly (no hooks needed here)
+
+// Type definitions
+type SectionKey = 'models' | 'schemas' | 'system' | 'prompts' | 'results';
 
 // Default values
 const DEFAULT_SCHEMA = `z.object({
@@ -73,12 +77,21 @@ export default function GenerateObjectPlaygroundPage({
   // All hooks MUST be declared before any conditional logic or returns
   const [mounted, setMounted] = useState(false);
 
+  // Navigation state
+  type NavMode = 'horizontal' | 'vertical';
+  const [navMode, setNavMode] = useState<NavMode>('vertical'); // Default to vertical for floating nav
+  const [showFloatingNav, setShowFloatingNav] = useState(false); // Only show when scrolled past inline bar
+  const [isExiting, setIsExiting] = useState(false); // Track exit animation
+  const [isToggling, setIsToggling] = useState(false); // Track toggle animation
+  const [activeSection, setActiveSection] = useState<SectionKey | null>('models');
+
   // Refs for scrolling to sections
   const modelSectionRef = useRef<HTMLDivElement>(null);
   const schemaSectionRef = useRef<HTMLDivElement>(null);
   const systemSectionRef = useRef<HTMLDivElement>(null);
   const promptSectionRef = useRef<HTMLDivElement>(null);
   const resultsSectionRef = useRef<HTMLDivElement>(null);
+  const horizontalNavRef = useRef<HTMLDivElement>(null);
 
   // Copy management
   const [copiedStates, setCopiedStates] = useState<Record<string, boolean>>({});
@@ -310,6 +323,83 @@ export default function GenerateObjectPlaygroundPage({
     setConfig
   ]);
 
+  // IntersectionObserver for nav visibility (show floating nav when inline bar scrolls out of view)
+  useEffect(() => {
+    if (!mounted || !horizontalNavRef.current) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry.isIntersecting && !showFloatingNav) {
+          // Show floating nav when inline bar scrolls out of view
+          setIsExiting(false);
+          setShowFloatingNav(true);
+        } else if (entry.isIntersecting && showFloatingNav) {
+          // Start exit animation
+          setIsExiting(true);
+          // Wait for animation to complete before hiding
+          setTimeout(() => {
+            setShowFloatingNav(false);
+            setIsExiting(false);
+          }, 400); // Match animation duration
+        }
+      },
+      { threshold: 0, rootMargin: '0px' }
+    );
+
+    observer.observe(horizontalNavRef.current);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [mounted, showFloatingNav]);
+
+  // IntersectionObserver for active section tracking
+  useEffect(() => {
+    if (!mounted) return;
+
+    const sections = [
+      { ref: modelSectionRef, key: 'models' as SectionKey },
+      { ref: schemaSectionRef, key: 'schemas' as SectionKey },
+      { ref: systemSectionRef, key: 'system' as SectionKey },
+      { ref: promptSectionRef, key: 'prompts' as SectionKey },
+      { ref: resultsSectionRef, key: 'results' as SectionKey },
+    ];
+
+    let debounceTimer: NodeJS.Timeout;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        clearTimeout(debounceTimer);
+
+        debounceTimer = setTimeout(() => {
+          // Find the first intersecting section
+          const intersecting = entries.find(entry => entry.isIntersecting);
+          if (intersecting) {
+            const sectionKey = intersecting.target.getAttribute('data-section') as SectionKey;
+            if (sectionKey) {
+              setActiveSection(sectionKey);
+            }
+          }
+        }, 200); // 200ms debounce to prevent rapid switching
+      },
+      {
+        threshold: 0.1, // Lower threshold so results grid triggers easier
+        rootMargin: '-10% 0px -70% 0px' // Smaller top margin so results section activates sooner
+      }
+    );
+
+    sections.forEach(({ ref }) => {
+      if (ref.current) {
+        observer.observe(ref.current);
+      }
+    });
+
+    return () => {
+      clearTimeout(debounceTimer);
+      observer.disconnect();
+    };
+  }, [mounted]);
+
   const handleUpdateConfig = (updates: Partial<GenerateObjectConfig>) => {
     console.log('handleUpdateConfig called with updates:', updates);
     setConfig(prev => {
@@ -332,8 +422,61 @@ export default function GenerateObjectPlaygroundPage({
   };
 
   // Scroll to section
-  const scrollToSection = (ref: React.RefObject<HTMLDivElement | null>) => {
-    ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const scrollToSection = (section: SectionKey) => {
+    const sectionRefs = {
+      models: modelSectionRef,
+      schemas: schemaSectionRef,
+      system: systemSectionRef,
+      prompts: promptSectionRef,
+      results: resultsSectionRef,
+    };
+    sectionRefs[section].current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  // Toggle navigation layout (vertical <-> horizontal)
+  const handleToggleNav = () => {
+    // Start exit animation
+    setIsToggling(true);
+
+    // Wait for exit animation to complete, then switch mode
+    setTimeout(() => {
+      setNavMode(prevMode => prevMode === 'horizontal' ? 'vertical' : 'horizontal');
+      setIsToggling(false);
+    }, 400); // Match animation duration
+  };
+
+  // Utility functions for section styling
+  const getSectionColor = (section: SectionKey) => {
+    const colors = {
+      models: 'text-blue-600',
+      schemas: 'text-green-600',
+      system: 'text-yellow-600',
+      prompts: 'text-orange-600',
+      results: 'text-purple-600'
+    };
+    return colors[section];
+  };
+
+  const getSectionShadow = (section: SectionKey) => {
+    const shadows = {
+      models: 'shadow-[0_0_12px_rgba(59,130,246,0.5)]',
+      schemas: 'shadow-[0_0_12px_rgba(34,197,94,0.5)]',
+      system: 'shadow-[0_0_12px_rgba(234,179,8,0.5)]',
+      prompts: 'shadow-[0_0_12px_rgba(249,115,22,0.5)]',
+      results: 'shadow-[0_0_12px_rgba(168,85,247,0.5)]'
+    };
+    return shadows[section];
+  };
+
+  const getSectionHoverBg = (section: SectionKey) => {
+    const backgrounds = {
+      models: 'hover:bg-blue-100 dark:hover:bg-blue-900/30',
+      schemas: 'hover:bg-green-100 dark:hover:bg-green-900/30',
+      system: 'hover:bg-yellow-100 dark:hover:bg-yellow-900/30',
+      prompts: 'hover:bg-orange-100 dark:hover:bg-orange-900/30',
+      results: 'hover:bg-purple-100 dark:hover:bg-purple-900/30'
+    };
+    return backgrounds[section];
   };
 
   // Model thread handlers
@@ -664,67 +807,96 @@ export default function GenerateObjectPlaygroundPage({
       </div>
 
 
-      {/* Pipeline Flow Visualization - Sticky Floating Navigation */}
-      <div className="sticky top-3 z-50 mx-auto w-fit bg-gradient-to-r from-blue-50 to-purple-50 dark:from-slate-800 dark:to-slate-900 border-2 border-dashed border-gray-300 dark:border-slate-700 rounded-full shadow-lg backdrop-blur-sm bg-opacity-95 dark:bg-opacity-95">
-        <div className="px-6 py-2">
-          <div className="flex items-center justify-center gap-3 text-sm font-medium text-gray-700 dark:text-gray-300">
-            <button
-              onClick={() => scrollToSection(modelSectionRef)}
-              className="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors cursor-pointer"
-              title="Jump to Models section"
-            >
-              <Brain className="h-4 w-4 text-blue-600" />
-              <span className="hidden sm:inline">Models ({config.modelThreads.length})</span>
-              <span className="sm:hidden">({config.modelThreads.length})</span>
-            </button>
-            <div className="text-gray-400">➜</div>
-            <button
-              onClick={() => scrollToSection(schemaSectionRef)}
-              className="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors cursor-pointer"
-              title="Jump to Schemas section"
-            >
-              <Code className="h-4 w-4 text-green-600" />
-              <span className="hidden sm:inline">Schemas ({config.schemaThreads.length})</span>
-              <span className="sm:hidden">({config.schemaThreads.length})</span>
-            </button>
-            <div className="text-gray-400">➜</div>
-            <button
-              onClick={() => scrollToSection(systemSectionRef)}
-              className="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-yellow-100 dark:hover:bg-yellow-900/30 transition-colors cursor-pointer"
-              title="Jump to System Prompts section"
-            >
-              <Cpu className="h-4 w-4 text-yellow-600" />
-              <span className="hidden sm:inline">System ({config.systemPromptThreads.length})</span>
-              <span className="sm:hidden">({config.systemPromptThreads.length})</span>
-            </button>
-            <div className="text-gray-400">➜</div>
-            <button
-              onClick={() => scrollToSection(promptSectionRef)}
-              className="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-orange-100 dark:hover:bg-orange-900/30 transition-colors cursor-pointer"
-              title="Jump to Prompts section"
-            >
-              <FileJson className="h-4 w-4 text-orange-600" />
-              <span className="hidden sm:inline">Prompts ({config.promptDataThreads.length})</span>
-              <span className="sm:hidden">({config.promptDataThreads.length})</span>
-            </button>
-            <div className="text-gray-400">➜</div>
-            <button
-              onClick={() => scrollToSection(resultsSectionRef)}
-              className="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-colors cursor-pointer"
-              title="Jump to Results section"
-            >
-              <LayoutGrid className="h-4 w-4 text-purple-600" />
-              <span className="hidden sm:inline">Output ({totalCombinations})</span>
-              <span className="sm:hidden">({totalCombinations})</span>
-            </button>
+      {/* Horizontal Navigation */}
+      <div
+        ref={horizontalNavRef}
+        className="mx-auto w-fit transition-all duration-300"
+      >
+        <div className="flex items-center gap-2">
+          <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-slate-800 dark:to-slate-900 border-2 border-dashed border-gray-300 dark:border-slate-700 rounded-full shadow-lg backdrop-blur-sm bg-opacity-95 dark:bg-opacity-95">
+            <div className="px-6 py-2">
+              <div className="flex items-center justify-center gap-1 text-sm font-medium text-gray-700 dark:text-gray-300">
+                <button
+                  onClick={() => scrollToSection('models')}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-md transition-all cursor-pointer whitespace-nowrap ${getSectionHoverBg(
+                    'models'
+                  )}`}
+                  title="Jump to Models section"
+                >
+                  <Brain className={`h-4 w-4 ${getSectionColor('models')}`} />
+                  <span className="hidden sm:inline">Models ({config.modelThreads.length})</span>
+                  <span className="sm:hidden">({config.modelThreads.length})</span>
+                </button>
+                <div className="text-gray-400">➜</div>
+                <button
+                  onClick={() => scrollToSection('schemas')}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-md transition-all cursor-pointer whitespace-nowrap ${getSectionHoverBg(
+                    'schemas'
+                  )}`}
+                  title="Jump to Schemas section"
+                >
+                  <Code className={`h-4 w-4 ${getSectionColor('schemas')}`} />
+                  <span className="hidden sm:inline">Schemas ({config.schemaThreads.length})</span>
+                  <span className="sm:hidden">({config.schemaThreads.length})</span>
+                </button>
+                <div className="text-gray-400">➜</div>
+                <button
+                  onClick={() => scrollToSection('system')}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-md transition-all cursor-pointer whitespace-nowrap ${getSectionHoverBg(
+                    'system'
+                  )}`}
+                  title="Jump to System Prompts section"
+                >
+                  <Cpu className={`h-4 w-4 ${getSectionColor('system')}`} />
+                  <span className="hidden sm:inline">System ({config.systemPromptThreads.length})</span>
+                  <span className="sm:hidden">({config.systemPromptThreads.length})</span>
+                </button>
+                <div className="text-gray-400">➜</div>
+                <button
+                  onClick={() => scrollToSection('prompts')}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-md transition-all cursor-pointer whitespace-nowrap ${getSectionHoverBg(
+                    'prompts'
+                  )}`}
+                  title="Jump to Prompts section"
+                >
+                  <FileJson className={`h-4 w-4 ${getSectionColor('prompts')}`} />
+                  <span className="hidden sm:inline">Prompts ({config.promptDataThreads.length})</span>
+                  <span className="sm:hidden">({config.promptDataThreads.length})</span>
+                </button>
+                <div className="text-gray-400">➜</div>
+                <button
+                  onClick={() => scrollToSection('results')}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-md transition-all cursor-pointer whitespace-nowrap ${getSectionHoverBg(
+                    'results'
+                  )}`}
+                  title="Jump to Results section"
+                >
+                  <LayoutGrid className={`h-4 w-4 ${getSectionColor('results')}`} />
+                  <span className="hidden sm:inline">Output ({totalCombinations})</span>
+                  <span className="sm:hidden">({totalCombinations})</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
+      <FloatingNav
+        showFloatingNav={showFloatingNav}
+        navMode={navMode}
+        isExiting={isExiting}
+        isToggling={isToggling}
+        activeSection={activeSection}
+        config={config}
+        totalCombinations={totalCombinations}
+        handleToggleNav={handleToggleNav}
+        scrollToSection={scrollToSection}
+      />
+
       {/* Pipeline Threading */}
       <div className="space-y-6">
         {/* Model Threads */}
-        <div ref={modelSectionRef}>
+        <div ref={modelSectionRef} data-section="models">
           <ModelThreadSection
             threads={config.modelThreads}
             onAddThread={handleAddModelThread}
@@ -737,7 +909,7 @@ export default function GenerateObjectPlaygroundPage({
         </div>
 
         {/* Schema Threads */}
-        <div ref={schemaSectionRef}>
+        <div ref={schemaSectionRef} data-section="schemas">
           <SchemaThreadSection
             threads={config.schemaThreads}
             onAddThread={handleAddSchemaThread}
@@ -750,7 +922,7 @@ export default function GenerateObjectPlaygroundPage({
         </div>
 
         {/* System Prompt Threads */}
-        <div ref={systemSectionRef}>
+        <div ref={systemSectionRef} data-section="system">
           <SystemPromptThreadSection
             threads={config.systemPromptThreads}
             onAddThread={handleAddSystemPromptThread}
@@ -763,7 +935,7 @@ export default function GenerateObjectPlaygroundPage({
         </div>
 
         {/* Prompt Data Threads */}
-        <div ref={promptSectionRef}>
+        <div ref={promptSectionRef} data-section="prompts">
           <PromptDataThreadSection
             threads={config.promptDataThreads}
             onAddThread={handleAddPromptDataThread}
@@ -777,7 +949,7 @@ export default function GenerateObjectPlaygroundPage({
       </div>
 
       {/* Results Grid */}
-      <div ref={resultsSectionRef}>
+      <div ref={resultsSectionRef} data-section="results">
         <Card className="border-purple-200 border-2">
           <CardHeader>
             <div className="flex items-center gap-2">

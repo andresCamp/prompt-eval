@@ -7,7 +7,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -15,7 +15,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Input } from '@/components/ui/input';
 import { ButtonGroup, ButtonGroupSeparator } from '@/components/ui/button-group';
-import { Loader2, Play, Copy, Check, Clock, Hash, Lock, Unlock, ArrowUpDown, FileText, LayoutGrid, Brain, Code, Cpu, FileJson, X } from 'lucide-react';
+import { Loader2, Play, Copy, Check, Clock, Hash, Lock, Unlock, ArrowUpDown, LayoutGrid, Brain, Code, Cpu, FileJson, X, WholeWord, Type } from 'lucide-react';
 import { GenerateObjectExecutionThread } from './types';
 import { useAtom } from 'jotai';
 import { snapshotAtomFamily, buildSnapshotFromObjectThread, getGenerateObjectThreadKey } from '@/lib/atoms';
@@ -42,6 +42,65 @@ export function ResultsGrid({
   const [columns, setColumns] = useState<ColumnOption>('auto');
   const [customColumnCount, setCustomColumnCount] = useState<number>(5);
   const [selectedThreadIds, setSelectedThreadIds] = useState<Set<string>>(new Set());
+
+  // Global selection tracking for dynamic word/char counts
+  const [selectionState, setSelectionState] = useState<{
+    threadId: string | null;
+    selectedText: string;
+  }>({ threadId: null, selectedText: '' });
+
+  // Single global selection listener for all cards
+  useEffect(() => {
+    const handleSelectionChange = () => {
+      const selection = window.getSelection();
+      const selectedStr = selection?.toString() || '';
+
+      if (!selection || !selectedStr.trim() || selection.rangeCount === 0) {
+        // Only clear if there was previously a selection
+        setSelectionState(prev => {
+          if (prev.threadId === null && prev.selectedText === '') {
+            return prev; // No change, return same reference to prevent re-render
+          }
+          return { threadId: null, selectedText: '' };
+        });
+        return;
+      }
+
+      // Find which card the selection is in
+      const range = selection.getRangeAt(0);
+      const container = range.commonAncestorContainer;
+      let element: HTMLElement | null = container.nodeType === Node.TEXT_NODE
+        ? container.parentElement
+        : container as HTMLElement;
+
+      // Walk up the DOM to find data-json-output attribute
+      while (element) {
+        const threadId = element.getAttribute('data-json-output');
+        if (threadId) {
+          // Only update if selection actually changed
+          setSelectionState(prev => {
+            if (prev.threadId === threadId && prev.selectedText === selectedStr) {
+              return prev; // No change, return same reference to prevent re-render
+            }
+            return { threadId, selectedText: selectedStr };
+          });
+          return;
+        }
+        element = element.parentElement;
+      }
+
+      // Selection not in any card - only clear if there was previously a selection
+      setSelectionState(prev => {
+        if (prev.threadId === null && prev.selectedText === '') {
+          return prev; // No change, return same reference to prevent re-render
+        }
+        return { threadId: null, selectedText: '' };
+      });
+    };
+
+    document.addEventListener('selectionchange', handleSelectionChange);
+    return () => document.removeEventListener('selectionchange', handleSelectionChange);
+  }, []);
 
   const toggleSelection = (threadId: string) => {
     setSelectedThreadIds(prev => {
@@ -365,6 +424,7 @@ export function ResultsGrid({
             onCopy={onCopy}
             copiedStates={copiedStates}
             onSelectByField={selectByField}
+            selectionState={selectionState}
           />
         ))}
       </div>
@@ -439,14 +499,28 @@ interface ThreadCardProps {
   onCopy: (text: string, key: string) => void;
   copiedStates: Record<string, boolean>;
   onSelectByField: (fieldKey: 'model' | 'schema' | 'system' | 'prompt', value: string) => void;
+  selectionState: { threadId: string | null; selectedText: string };
 }
 
-function ThreadCard({ thread, sortBy, isSelected, onToggleSelection, onRunThread, onCopy, copiedStates, onSelectByField }: ThreadCardProps) {
+function ThreadCard({ thread, sortBy, isSelected, onToggleSelection, onRunThread, onCopy, copiedStates, onSelectByField, selectionState }: ThreadCardProps) {
   const pageNs = (typeof window !== 'undefined' ? (window as unknown as { __PAGE_NS__?: string }).__PAGE_NS__ : undefined);
   const stableKey = getGenerateObjectThreadKey(thread, pageNs);
   const [snapshot] = useAtom(snapshotAtomFamily(stableKey));
   const isLocked = !!snapshot;
   const result = (isLocked && snapshot?.result) ? snapshot.result : thread.result;
+
+  // Dynamic word/char count based on text selection
+  const hasSelection = selectionState.threadId === thread.id;
+  const selectedText = hasSelection ? selectionState.selectedText : '';
+  const jsonString = result?.object ? JSON.stringify(result.object, null, 2) : '';
+  const displayText = hasSelection ? selectedText : jsonString;
+  const wordCount = countWords(displayText);
+  const charCount = displayText.length;
+
+  // Dynamic styling for word/char counts
+  const dynamicStatsClassName = hasSelection
+    ? 'text-gray-900 dark:text-gray-100'
+    : 'text-gray-500 dark:text-gray-400';
 
   // Determine field order based on sort
   type FieldInfo = { name: string; icon: React.ComponentType<{ className?: string }>; color: string; key: string };
@@ -556,20 +630,27 @@ function ThreadCard({ thread, sortBy, isSelected, onToggleSelection, onRunThread
           </div>
         ) : (
           <div className="space-y-2">
-            <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+            <div className="flex items-center justify-between text-xs">
               <span className="flex items-center gap-3">
-                <span className="flex items-center gap-1">
+                {/* Duration - static, always gray */}
+                <span className="flex items-center gap-1 text-gray-500 dark:text-gray-400">
                   <Clock className="h-3 w-3" />
                   {result.duration !== undefined ? `${result.duration.toFixed(1)}s` : '--'}
                 </span>
-                <span className="flex items-center gap-1">
-                  <Hash className="h-3 w-3" />
+                {/* Token count - static, NEW ICON: WholeWord */}
+                <span className="flex items-center gap-1 text-gray-500 dark:text-gray-400">
+                  <WholeWord className="h-3 w-3" />
                   {result.usage?.totalTokens || ((result.usage?.inputTokens || 0) + (result.usage?.outputTokens || 0)) || 0}
                 </span>
-                {/* add word count - count words in the result.object */}
-                <span className="flex items-center gap-1">
-                  <FileText className="h-3 w-3" />
-                  {countWords(JSON.stringify(result.object, null, 2)) || 0}
+                {/* Word count - DYNAMIC, NEW ICON: Hash */}
+                <span className={`flex items-center gap-1 transition-colors ${dynamicStatsClassName}`}>
+                  <Hash className="h-3 w-3" />
+                  {wordCount || 0}
+                </span>
+                {/* Character count - DYNAMIC, NEW STAT + ICON: Type */}
+                <span className={`flex items-center gap-1 transition-colors ${dynamicStatsClassName}`}>
+                  <Type className="h-3 w-3" />
+                  {charCount || 0}
                 </span>
               </span>
               <Button
@@ -585,7 +666,7 @@ function ThreadCard({ thread, sortBy, isSelected, onToggleSelection, onRunThread
                 )}
               </Button>
             </div>
-            <ScrollArea className="h-auto max-h-64">
+            <ScrollArea className="h-auto max-h-64" data-json-output={thread.id}>
               <pre className="text-xs font-mono whitespace-pre-wrap break-words text-gray-900 dark:text-gray-100">
                 {JSON.stringify(result.object, null, 2)}
               </pre>
