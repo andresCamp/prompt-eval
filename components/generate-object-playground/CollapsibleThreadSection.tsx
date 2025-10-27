@@ -93,10 +93,12 @@ function CollapsibleThreadSection<T extends BaseThread>({
     onUpdateThread(thread.id, updates);
   };
 
+  const cardCursor = isOpen ? 'cursor-n-resize' : 'cursor-s-resize';
+
   return (
     <Card className={`${borderColor} border-2`}>
-      <CardHeader 
-        className="cursor-pointer"
+      <CardHeader
+        className={cardCursor}
         onClick={() => setIsOpen(!isOpen)}
       >
         <div className="flex items-center justify-between">

@@ -74,8 +74,10 @@ export function ModelThreadSection({
     ? `${threads.length} thread${threads.length > 1 ? 's' : ''}: ${threads[0].provider}/${threads[0].model}${threads.length > 1 ? '...' : ''}`
     : 'No threads';
 
+  const cardCursor = isOpen ? 'cursor-n-resize' : 'cursor-s-resize';
+
   return (
-    <Card className="cursor-pointer hover:bg-muted transition-colors" onClick={onToggle}>
+    <Card className={`${cardCursor} hover:bg-muted transition-colors`} onClick={onToggle}>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 py-3">
         <div className="flex items-center gap-2">
           <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
