@@ -10,8 +10,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Copy, Trash2, Brain, Code, Cpu, FileJson, Eye, EyeOff, ChevronDown, Sparkles, Loader2, Undo2, GitBranchPlus, Check } from 'lucide-react';
+import { Plus, Copy, Trash2, Brain, Code, Cpu, FileJson, Eye, EyeOff, ChevronDown, ChevronUp, Sparkles, Loader2, Undo2, GitBranchPlus, Check } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import * as Collapsible from '@radix-ui/react-collapsible';
 import {
   GenerateObjectModelThread,
   SchemaThread,
@@ -63,7 +64,7 @@ interface BaseThreadSectionProps<T> {
   defaultOpen?: boolean;
 }
 
-type BaseThread = { id: string; name: string; visible: boolean };
+type BaseThread = { id: string; name: string; visible: boolean; isExpanded?: boolean };
 
 function CollapsibleThreadSection<T extends BaseThread>({
   title,
@@ -138,58 +139,89 @@ function CollapsibleThreadSection<T extends BaseThread>({
             </Button>
             
             <div className={`grid gap-4 ${threads.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
-              {threads.map((thread) => (
-                <div key={thread.id} className={`border rounded-lg p-4 space-y-3 ${!thread.visible ? 'opacity-50' : ''}`}>
-                  <div className="flex items-center justify-between gap-2">
-                    <TitleInputWithAI
-                      value={thread.name}
-                      onChange={(value) => applyUpdate(thread, { name: value } as Partial<T>)}
-                      content={getThreadContent ? getThreadContent(thread) : ''}
-                      contentType={contentType}
-                      siblingTitles={threads.map(t => t.name)}
-                      placeholder="Thread name"
-                      className="flex-1"
-                    />
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          applyUpdate(thread, { visible: !thread.visible } as Partial<T>);
-                        }}
-                        className="h-8 w-8"
-                      >
-                        {thread.visible ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onDuplicateThread(thread.id);
-                        }}
-                        className="h-8 w-8"
-                      >
-                        <GitBranchPlus className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onDeleteThread(thread.id);
-                        }}
-                        className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
-                        title="Delete thread"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+              {threads.map((thread) => {
+                const isExpanded = thread.isExpanded ?? true; // Default to expanded
+
+                return (
+                  <Collapsible.Root
+                    key={thread.id}
+                    open={isExpanded}
+                    onOpenChange={(open) => {
+                      applyUpdate(thread, { isExpanded: open } as Partial<T>);
+                    }}
+                  >
+                    <div className={`border rounded-lg p-4 space-y-3 ${!thread.visible ? 'opacity-50' : ''}`}>
+                      <div className="flex items-center justify-between gap-2">
+                        <TitleInputWithAI
+                          value={thread.name}
+                          onChange={(value) => applyUpdate(thread, { name: value } as Partial<T>)}
+                          content={getThreadContent ? getThreadContent(thread) : ''}
+                          contentType={contentType}
+                          siblingTitles={threads.map(t => t.name)}
+                          placeholder="Thread name"
+                          className="flex-1"
+                        />
+                        <div className="flex items-center gap-1">
+                          <Collapsible.Trigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              title={isExpanded ? "Collapse card" : "Expand card"}
+                            >
+                              {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                            </Button>
+                          </Collapsible.Trigger>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const newVisible = !thread.visible;
+                              // Toggle visibility and auto-expand/collapse
+                              applyUpdate(thread, {
+                                visible: newVisible,
+                                isExpanded: newVisible
+                              } as Partial<T>);
+                            }}
+                            className="h-8 w-8"
+                            title={thread.visible ? "Hide from execution" : "Include in execution"}
+                          >
+                            {thread.visible ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onDuplicateThread(thread.id);
+                            }}
+                            className="h-8 w-8"
+                            title="Duplicate thread"
+                          >
+                            <GitBranchPlus className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onDeleteThread(thread.id);
+                            }}
+                            className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
+                            title="Delete thread"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                      <Collapsible.Content className="data-[state=open]:animate-slideDown data-[state=closed]:animate-slideUp">
+                        {renderContent(thread, (updates) => applyUpdate(thread, updates))}
+                      </Collapsible.Content>
                     </div>
-                  </div>
-                  {renderContent(thread, (updates) => applyUpdate(thread, updates))}
-                </div>
-              ))}
+                  </Collapsible.Root>
+                );
+              })}
             </div>
           </div>
         </CardContent>

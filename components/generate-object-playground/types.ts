@@ -9,6 +9,7 @@ export interface SchemaThread {
   schema: string; // Zod schema as string
   schemaDescription?: string;
   visible: boolean;
+  isExpanded?: boolean; // Default: true - controls card collapse state
 }
 
 export interface SystemPromptThread {
@@ -17,6 +18,7 @@ export interface SystemPromptThread {
   prompt: string; // System prompt to guide the transformation
   variables?: Record<string, string>; // Variable values for ${variable} placeholders
   visible: boolean;
+  isExpanded?: boolean; // Default: true - controls card collapse state
 }
 
 export interface PromptDataThread {
@@ -25,6 +27,7 @@ export interface PromptDataThread {
   prompt: string; // The prompt (can be JSON data or text)
   variables?: Record<string, string>; // Variable values for ${variable} placeholders
   visible: boolean;
+  isExpanded?: boolean; // Default: true - controls card collapse state
 }
 
 export interface GenerateObjectModelThread {
@@ -33,6 +36,7 @@ export interface GenerateObjectModelThread {
   provider: string;
   model: string;
   visible: boolean;
+  isExpanded?: boolean; // Default: true - controls card collapse state
 }
 
 export interface GenerateObjectExecutionThread {
