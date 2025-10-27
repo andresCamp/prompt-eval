@@ -15,11 +15,10 @@
 
 'use client';
 
-import { useState, useEffect, use } from 'react';
+import { useState, useEffect, use, useRef } from 'react';
 import { useAtom } from 'jotai';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Loader2, Play, GitBranch } from 'lucide-react';
+import { Loader2, GitBranch, Brain, Code, Cpu, FileJson, LayoutGrid, ArrowUpToLine, ArrowRightToLine } from 'lucide-react';
 import { getGenerateObjectThreadKey, buildSnapshotFromThread } from '@/lib/atoms';
 import { 
   configAtomFamily
@@ -42,7 +41,11 @@ import {
 import { ResultsGrid } from '@/components/generate-object-playground/ResultsGrid';
 import { generateId } from '@/components/prompt-playground/shared/utils';
 import { replaceVariables } from '@/components/generate-object-playground/utils';
+import { FloatingNav } from '@/components/generate-object-playground/FloatingNav';
 // Module hydration uses localStorage directly (no hooks needed here)
+
+// Type definitions
+type SectionKey = 'models' | 'schemas' | 'system' | 'prompts' | 'results';
 
 // Default values
 const DEFAULT_SCHEMA = `z.object({
@@ -73,6 +76,22 @@ export default function GenerateObjectPlaygroundPage({
 
   // All hooks MUST be declared before any conditional logic or returns
   const [mounted, setMounted] = useState(false);
+
+  // Navigation state
+  type NavMode = 'horizontal' | 'vertical';
+  const [navMode, setNavMode] = useState<NavMode>('vertical'); // Default to vertical for floating nav
+  const [showFloatingNav, setShowFloatingNav] = useState(false); // Only show when scrolled past inline bar
+  const [isExiting, setIsExiting] = useState(false); // Track exit animation
+  const [isToggling, setIsToggling] = useState(false); // Track toggle animation
+  const [activeSection, setActiveSection] = useState<SectionKey | null>('models');
+
+  // Refs for scrolling to sections
+  const modelSectionRef = useRef<HTMLDivElement>(null);
+  const schemaSectionRef = useRef<HTMLDivElement>(null);
+  const systemSectionRef = useRef<HTMLDivElement>(null);
+  const promptSectionRef = useRef<HTMLDivElement>(null);
+  const resultsSectionRef = useRef<HTMLDivElement>(null);
+  const horizontalNavRef = useRef<HTMLDivElement>(null);
 
   // Copy management
   const [copiedStates, setCopiedStates] = useState<Record<string, boolean>>({});
@@ -304,8 +323,86 @@ export default function GenerateObjectPlaygroundPage({
     setConfig
   ]);
 
+  // IntersectionObserver for nav visibility (show floating nav when inline bar scrolls out of view)
+  useEffect(() => {
+    if (!mounted || !horizontalNavRef.current) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry.isIntersecting && !showFloatingNav) {
+          // Show floating nav when inline bar scrolls out of view
+          setIsExiting(false);
+          setShowFloatingNav(true);
+        } else if (entry.isIntersecting && showFloatingNav) {
+          // Start exit animation
+          setIsExiting(true);
+          // Wait for animation to complete before hiding
+          setTimeout(() => {
+            setShowFloatingNav(false);
+            setIsExiting(false);
+          }, 400); // Match animation duration
+        }
+      },
+      { threshold: 0, rootMargin: '0px' }
+    );
+
+    observer.observe(horizontalNavRef.current);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [mounted, showFloatingNav]);
+
+  // Dual-sentinel IntersectionObserver for active section tracking
+  useEffect(() => {
+    if (!mounted) return;
+
+    const sectionOrder: SectionKey[] = ['models', 'schemas', 'system', 'prompts', 'results'];
+
+    const startObserver = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          const key = entry.target.getAttribute('data-section') as SectionKey;
+          if (key) setActiveSection(key);
+        }
+      },
+      { rootMargin: '-1px 0px 0px 0px', threshold: 0 }
+    );
+
+    const endObserver = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          const key = entry.target.getAttribute('data-section') as SectionKey;
+          if (!key) return;
+          const idx = sectionOrder.indexOf(key);
+          const next = sectionOrder[idx + 1] || key;
+          setActiveSection(next as SectionKey);
+        }
+      },
+      { rootMargin: '0px 0px -50% 0px', threshold: 0 }
+    );
+
+    const startSentinels = document.querySelectorAll<HTMLSpanElement>('.scroll-sentinel-start');
+    const endSentinels = document.querySelectorAll<HTMLSpanElement>('.scroll-sentinel-end');
+    startSentinels.forEach((s) => startObserver.observe(s));
+    endSentinels.forEach((s) => endObserver.observe(s));
+
+    return () => {
+      window.removeEventListener('resize', () => setActiveSection('models'));
+      startSentinels.forEach((s) => startObserver.unobserve(s));
+      endSentinels.forEach((s) => endObserver.unobserve(s));
+      startObserver.disconnect();
+      endObserver.disconnect();
+    };
+  }, [mounted]);
+
   const handleUpdateConfig = (updates: Partial<GenerateObjectConfig>) => {
-    setConfig(prev => prev ? ({ ...prev, ...updates }) : prev);
+    console.log('handleUpdateConfig called with updates:', updates);
+    setConfig(prev => {
+      const newConfig = prev ? ({ ...prev, ...updates }) : prev;
+      console.log('New config after update:', newConfig);
+      return newConfig;
+    });
   };
 
   const handleCopy = async (text: string, key: string) => {
@@ -318,6 +415,64 @@ export default function GenerateObjectPlaygroundPage({
     } catch (err) {
       console.error('Failed to copy text: ', err);
     }
+  };
+
+  // Scroll to section
+  const scrollToSection = (section: SectionKey) => {
+    const sectionRefs = {
+      models: modelSectionRef,
+      schemas: schemaSectionRef,
+      system: systemSectionRef,
+      prompts: promptSectionRef,
+      results: resultsSectionRef,
+    };
+    sectionRefs[section].current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  // Toggle navigation layout (vertical <-> horizontal)
+  const handleToggleNav = () => {
+    // Start exit animation
+    setIsToggling(true);
+
+    // Wait for exit animation to complete, then switch mode
+    setTimeout(() => {
+      setNavMode(prevMode => prevMode === 'horizontal' ? 'vertical' : 'horizontal');
+      setIsToggling(false);
+    }, 400); // Match animation duration
+  };
+
+  // Utility functions for section styling
+  const getSectionColor = (section: SectionKey) => {
+    const colors = {
+      models: 'text-blue-600',
+      schemas: 'text-green-600',
+      system: 'text-yellow-600',
+      prompts: 'text-orange-600',
+      results: 'text-purple-600'
+    };
+    return colors[section];
+  };
+
+  const getSectionShadow = (section: SectionKey) => {
+    const shadows = {
+      models: 'shadow-[0_0_12px_rgba(59,130,246,0.5)]',
+      schemas: 'shadow-[0_0_12px_rgba(34,197,94,0.5)]',
+      system: 'shadow-[0_0_12px_rgba(234,179,8,0.5)]',
+      prompts: 'shadow-[0_0_12px_rgba(249,115,22,0.5)]',
+      results: 'shadow-[0_0_12px_rgba(168,85,247,0.5)]'
+    };
+    return shadows[section];
+  };
+
+  const getSectionHoverBg = (section: SectionKey) => {
+    const backgrounds = {
+      models: 'hover:bg-blue-100 dark:hover:bg-blue-900/30',
+      schemas: 'hover:bg-green-100 dark:hover:bg-green-900/30',
+      system: 'hover:bg-yellow-100 dark:hover:bg-yellow-900/30',
+      prompts: 'hover:bg-orange-100 dark:hover:bg-orange-900/30',
+      results: 'hover:bg-purple-100 dark:hover:bg-purple-900/30'
+    };
+    return backgrounds[section];
   };
 
   // Model thread handlers
@@ -335,10 +490,13 @@ export default function GenerateObjectPlaygroundPage({
   };
 
   const handleUpdateModelThread = (id: string, updates: Partial<GenerateObjectModelThread>) => {
+    console.log('handleUpdateModelThread called:', { id, updates });
+    const updatedThreads = config.modelThreads.map(thread =>
+      thread.id === id ? { ...thread, ...updates } : thread
+    );
+    console.log('Updated threads:', updatedThreads);
     handleUpdateConfig({
-      modelThreads: config.modelThreads.map(thread => 
-        thread.id === id ? { ...thread, ...updates } : thread
-      )
+      modelThreads: updatedThreads
     });
   };
 
@@ -413,10 +571,13 @@ export default function GenerateObjectPlaygroundPage({
   };
 
   const handleUpdateSystemPromptThread = (id: string, updates: Partial<SystemPromptThread>) => {
+    console.log('handleUpdateSystemPromptThread called:', { id, updates });
+    const updatedThreads = config.systemPromptThreads.map(thread =>
+      thread.id === id ? { ...thread, ...updates } : thread
+    );
+    console.log('Updated system prompt threads:', updatedThreads);
     handleUpdateConfig({
-      systemPromptThreads: config.systemPromptThreads.map(thread => 
-        thread.id === id ? { ...thread, ...updates } : thread
-      )
+      systemPromptThreads: updatedThreads
     });
   };
 
@@ -601,21 +762,8 @@ export default function GenerateObjectPlaygroundPage({
     }
   };
 
-  const handleRunAllExecutionThreads = async () => {
-    // Run all visible execution threads
-    const visibleThreads = config.executionThreads.filter(thread => thread.visible);
-    
-    // Run in batches to prevent rate limiting
-    const batchSize = 3;
-    for (let i = 0; i < visibleThreads.length; i += batchSize) {
-      const batch = visibleThreads.slice(i, i + batchSize);
-      await Promise.all(batch.map(thread => handleRunExecutionThread(thread.id)));
-    }
-  };
-
   // Calculate total combinations (with null check)
   const totalCombinations = config?.executionThreads?.filter(t => t.visible).length || 0;
-  const anyThreadRunning = config?.executionThreads?.some(thread => thread.isRunning) || false;
 
   // Show loading until mounted to prevent hydration issues
   if (!mounted || !config) {
@@ -655,123 +803,175 @@ export default function GenerateObjectPlaygroundPage({
       </div>
 
 
-      {/* Pipeline Flow Visualization */}
-      <Card className="bg-gradient-to-r from-blue-50 to-purple-50 dark:bg-gradient-to-r dark:from-slate-800 dark:to-slate-900 border-2 border-dashed dark:border-slate-700">
-        <CardContent className="pt-6">
-          <div className="flex items-center justify-center gap-4 text-sm font-medium text-gray-700 dark:text-gray-300">
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-              Models ({config.modelThreads.length})
-            </div>
-            <div>�</div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-              Schemas ({config.schemaThreads.length})
-            </div>
-            <div>�</div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
-              System ({config.systemPromptThreads.length})
-            </div>
-            <div>�</div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
-              Prompts ({config.promptDataThreads.length})
-            </div>
-            <div>�</div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
-              Output ({totalCombinations})
+      {/* Horizontal Navigation */}
+      <div
+        ref={horizontalNavRef}
+        className="mx-auto w-fit transition-all duration-300"
+      >
+        <div className="flex items-center gap-2">
+          <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-slate-800 dark:to-slate-900 border-2 border-dashed border-gray-300 dark:border-slate-700 rounded-full shadow-lg backdrop-blur-sm bg-opacity-95 dark:bg-opacity-95">
+            <div className="px-6 py-2">
+              <div className="flex items-center justify-center gap-1 text-sm font-medium text-gray-700 dark:text-gray-300">
+                <button
+                  onClick={() => scrollToSection('models')}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-md transition-all cursor-pointer whitespace-nowrap ${getSectionHoverBg(
+                    'models'
+                  )}`}
+                  title="Jump to Models section"
+                >
+                  <Brain className={`h-4 w-4 ${getSectionColor('models')}`} />
+                  <span className="hidden sm:inline">Models ({config.modelThreads.length})</span>
+                  <span className="sm:hidden">({config.modelThreads.length})</span>
+                </button>
+                <div className="text-gray-400">➜</div>
+                <button
+                  onClick={() => scrollToSection('schemas')}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-md transition-all cursor-pointer whitespace-nowrap ${getSectionHoverBg(
+                    'schemas'
+                  )}`}
+                  title="Jump to Schemas section"
+                >
+                  <Code className={`h-4 w-4 ${getSectionColor('schemas')}`} />
+                  <span className="hidden sm:inline">Schemas ({config.schemaThreads.length})</span>
+                  <span className="sm:hidden">({config.schemaThreads.length})</span>
+                </button>
+                <div className="text-gray-400">➜</div>
+                <button
+                  onClick={() => scrollToSection('system')}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-md transition-all cursor-pointer whitespace-nowrap ${getSectionHoverBg(
+                    'system'
+                  )}`}
+                  title="Jump to System Prompts section"
+                >
+                  <Cpu className={`h-4 w-4 ${getSectionColor('system')}`} />
+                  <span className="hidden sm:inline">System ({config.systemPromptThreads.length})</span>
+                  <span className="sm:hidden">({config.systemPromptThreads.length})</span>
+                </button>
+                <div className="text-gray-400">➜</div>
+                <button
+                  onClick={() => scrollToSection('prompts')}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-md transition-all cursor-pointer whitespace-nowrap ${getSectionHoverBg(
+                    'prompts'
+                  )}`}
+                  title="Jump to Prompts section"
+                >
+                  <FileJson className={`h-4 w-4 ${getSectionColor('prompts')}`} />
+                  <span className="hidden sm:inline">Prompts ({config.promptDataThreads.length})</span>
+                  <span className="sm:hidden">({config.promptDataThreads.length})</span>
+                </button>
+                <div className="text-gray-400">➜</div>
+                <button
+                  onClick={() => scrollToSection('results')}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-md transition-all cursor-pointer whitespace-nowrap ${getSectionHoverBg(
+                    'results'
+                  )}`}
+                  title="Jump to Results section"
+                >
+                  <LayoutGrid className={`h-4 w-4 ${getSectionColor('results')}`} />
+                  <span className="hidden sm:inline">Output ({totalCombinations})</span>
+                  <span className="sm:hidden">({totalCombinations})</span>
+                </button>
+              </div>
             </div>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
+
+      <FloatingNav
+        showFloatingNav={showFloatingNav}
+        navMode={navMode}
+        isExiting={isExiting}
+        isToggling={isToggling}
+        activeSection={activeSection}
+        config={config}
+        totalCombinations={totalCombinations}
+        handleToggleNav={handleToggleNav}
+        scrollToSection={scrollToSection}
+      />
 
       {/* Pipeline Threading */}
       <div className="space-y-6">
         {/* Model Threads */}
-        <ModelThreadSection
-          threads={config.modelThreads}
-          onAddThread={handleAddModelThread}
-          onUpdateThread={handleUpdateModelThread}
-          onDeleteThread={handleDeleteModelThread}
-          onDuplicateThread={handleDuplicateModelThread}
-          copiedStates={copiedStates}
-          onCopy={handleCopy}
-        />
+        <div ref={modelSectionRef} data-section="models">
+          <span className="scroll-sentinel-start" data-section="models" />
+          <ModelThreadSection
+            threads={config.modelThreads}
+            onAddThread={handleAddModelThread}
+            onUpdateThread={handleUpdateModelThread}
+            onDeleteThread={handleDeleteModelThread}
+            onDuplicateThread={handleDuplicateModelThread}
+            copiedStates={copiedStates}
+            onCopy={handleCopy}
+          />
+          <span className="scroll-sentinel-end" data-section="models" />
+        </div>
 
         {/* Schema Threads */}
-        <SchemaThreadSection
-          threads={config.schemaThreads}
-          onAddThread={handleAddSchemaThread}
-          onUpdateThread={handleUpdateSchemaThread}
-          onDeleteThread={handleDeleteSchemaThread}
-          onDuplicateThread={handleDuplicateSchemaThread}
-          copiedStates={copiedStates}
-          onCopy={handleCopy}
-        />
+        <div ref={schemaSectionRef} data-section="schemas">
+          <span className="scroll-sentinel-start" data-section="schemas" />
+          <SchemaThreadSection
+            threads={config.schemaThreads}
+            onAddThread={handleAddSchemaThread}
+            onUpdateThread={handleUpdateSchemaThread}
+            onDeleteThread={handleDeleteSchemaThread}
+            onDuplicateThread={handleDuplicateSchemaThread}
+            copiedStates={copiedStates}
+            onCopy={handleCopy}
+          />
+          <span className="scroll-sentinel-end" data-section="schemas" />
+        </div>
 
         {/* System Prompt Threads */}
-        <SystemPromptThreadSection
-          threads={config.systemPromptThreads}
-          onAddThread={handleAddSystemPromptThread}
-          onUpdateThread={handleUpdateSystemPromptThread}
-          onDeleteThread={handleDeleteSystemPromptThread}
-          onDuplicateThread={handleDuplicateSystemPromptThread}
-          copiedStates={copiedStates}
-          onCopy={handleCopy}
-        />
+        <div ref={systemSectionRef} data-section="system">
+          <span className="scroll-sentinel-start" data-section="system" />
+          <SystemPromptThreadSection
+            threads={config.systemPromptThreads}
+            onAddThread={handleAddSystemPromptThread}
+            onUpdateThread={handleUpdateSystemPromptThread}
+            onDeleteThread={handleDeleteSystemPromptThread}
+            onDuplicateThread={handleDuplicateSystemPromptThread}
+            copiedStates={copiedStates}
+            onCopy={handleCopy}
+          />
+          <span className="scroll-sentinel-end" data-section="system" />
+        </div>
 
         {/* Prompt Data Threads */}
-        <PromptDataThreadSection
-          threads={config.promptDataThreads}
-          onAddThread={handleAddPromptDataThread}
-          onUpdateThread={handleUpdatePromptDataThread}
-          onDeleteThread={handleDeletePromptDataThread}
-          onDuplicateThread={handleDuplicatePromptDataThread}
-          copiedStates={copiedStates}
-          onCopy={handleCopy}
-        />
+        <div ref={promptSectionRef} data-section="prompts">
+          <span className="scroll-sentinel-start" data-section="prompts" />
+          <PromptDataThreadSection
+            threads={config.promptDataThreads}
+            onAddThread={handleAddPromptDataThread}
+            onUpdateThread={handleUpdatePromptDataThread}
+            onDeleteThread={handleDeletePromptDataThread}
+            onDuplicateThread={handleDuplicatePromptDataThread}
+            copiedStates={copiedStates}
+            onCopy={handleCopy}
+          />
+          <span className="scroll-sentinel-end" data-section="prompts" />
+        </div>
       </div>
 
       {/* Results Grid */}
-      <Card className="border-purple-200 border-2">
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
-            <CardTitle>Results ({totalCombinations} combinations)</CardTitle>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <ResultsGrid
-            executionThreads={config.executionThreads}
-            onRunThread={handleRunExecutionThread}
-            onCopy={handleCopy}
-            copiedStates={copiedStates}
-          />
-        </CardContent>
-      </Card>
-
-      {/* Floating Run Button */}
-      <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-50">
-        <Button
-          onClick={handleRunAllExecutionThreads}
-          disabled={anyThreadRunning || totalCombinations === 0}
-          size="lg"
-          className="shadow-lg hover:shadow-xl transition-all duration-200 bg-primary hover:bg-primary/90 text-primary-foreground px-6 py-3 text-base font-semibold rounded-full"
-        >
-          {anyThreadRunning ? (
-            <>
-              <Loader2 className="h-5 w-5 mr-2 animate-spin" />
-              Running...
-            </>
-          ) : (
-            <>
-              <Play className="h-5 w-5 mr-2" />
-              Run All ({totalCombinations})
-            </>
-          )}
-        </Button>
+      <div ref={resultsSectionRef} data-section="results">
+        <span className="scroll-sentinel-start" data-section="results" />
+        <Card className="border-purple-200 border-2">
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
+              <CardTitle>Results ({totalCombinations} combinations)</CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <ResultsGrid
+              executionThreads={config.executionThreads}
+              onRunThread={handleRunExecutionThread}
+              onCopy={handleCopy}
+              copiedStates={copiedStates}
+            />
+          </CardContent>
+        </Card>
+        <span className="scroll-sentinel-end" data-section="results" />
       </div>
     </div>
   );

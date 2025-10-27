@@ -8,7 +8,6 @@
 import React, { ReactNode, useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Plus, Copy, Trash2, Brain, Cpu, MessageSquare, Eye, EyeOff, ChevronDown } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -20,6 +19,8 @@ import {
 import { PROVIDERS } from '@/lib/llm-providers';
 import { detectVariables, getVariableDefaults } from '@/components/generate-object-playground/utils';
 import { VariableInputs } from '@/components/generate-object-playground/VariableInputs';
+import { TitleInputWithAI } from '@/components/prompt-playground/shared/TitleInputWithAI';
+import { BatchTitleGenerator } from '@/components/prompt-playground/shared/BatchTitleGenerator';
 
 // Get all models that support text generation (assume all language models do)
 const getTextGenerationModels = () => {
@@ -56,6 +57,8 @@ interface BaseThreadSectionProps<T> {
   copiedStates: Record<string, boolean>;
   onCopy: (text: string, key: string) => void;
   renderContent: (thread: T, onUpdate: (updates: Partial<T>) => void) => ReactNode;
+  getThreadContent?: (thread: T) => string;
+  contentType?: string;
   defaultOpen?: boolean;
 }
 
@@ -73,6 +76,8 @@ function CollapsibleThreadSection<T extends BaseThread>({
   copiedStates: _copiedStates,
   onCopy: _onCopy,
   renderContent,
+  getThreadContent,
+  contentType,
   defaultOpen = true,
 }: BaseThreadSectionProps<T>) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
@@ -98,7 +103,17 @@ function CollapsibleThreadSection<T extends BaseThread>({
               <span className="text-sm text-gray-500">({hiddenCount} hidden)</span>
             )}
           </div>
-          <ChevronDown className={`h-5 w-5 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+          <div className="flex items-center gap-2">
+            {getThreadContent && threads.length > 1 && (
+              <BatchTitleGenerator
+                threads={threads}
+                getThreadContent={getThreadContent}
+                contentType={contentType}
+                onUpdateThread={onUpdateThread}
+              />
+            )}
+            <ChevronDown className={`h-5 w-5 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+          </div>
         </div>
       </CardHeader>
       {isOpen && (
@@ -120,12 +135,14 @@ function CollapsibleThreadSection<T extends BaseThread>({
               {threads.map((thread) => (
                 <div key={thread.id} className={`border rounded-lg p-4 space-y-3 ${!thread.visible ? 'opacity-50' : ''}`}>
                   <div className="flex items-center justify-between gap-2">
-                    <Input
+                    <TitleInputWithAI
                       value={thread.name}
-                      onChange={(e) => applyUpdate(thread, { name: e.target.value } as Partial<T>)}
-                      className="font-medium flex-1"
+                      onChange={(value) => applyUpdate(thread, { name: value } as Partial<T>)}
+                      content={getThreadContent ? getThreadContent(thread) : ''}
+                      contentType={contentType}
+                      siblingTitles={threads.map(t => t.name)}
                       placeholder="Thread name"
-                      onClick={(e) => e.stopPropagation()}
+                      className="flex-1"
                     />
                     <div className="flex items-center gap-1">
                       <Button
@@ -205,6 +222,8 @@ export function TextModelThreadSection({
       onDuplicateThread={onDuplicateThread}
       copiedStates={copiedStates}
       onCopy={onCopy}
+      getThreadContent={(thread) => `${thread.provider} ${thread.model}`}
+      contentType="model"
       renderContent={(thread, onUpdate) => {
         const providerModels = TEXT_GENERATION_MODELS.filter(m => m.provider === thread.provider);
         
@@ -326,6 +345,8 @@ export function TextSystemPromptThreadSection({
       onDuplicateThread={onDuplicateThread}
       copiedStates={copiedStates}
       onCopy={onCopy}
+      getThreadContent={(thread) => thread.prompt}
+      contentType="system-prompt"
       renderContent={(thread, onUpdate) => (
         <SystemPromptContent thread={thread} onUpdate={onUpdate} />
       )}
@@ -399,6 +420,8 @@ export function TextPromptDataThreadSection({
       onDuplicateThread={onDuplicateThread}
       copiedStates={copiedStates}
       onCopy={onCopy}
+      getThreadContent={(thread) => thread.prompt}
+      contentType="user-prompt"
       renderContent={(thread, onUpdate) => (
         <PromptDataContent thread={thread} onUpdate={onUpdate} />
       )}
