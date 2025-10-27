@@ -77,7 +77,7 @@ export function FloatingNav({
         >
           <div className="relative">
             <div className="bg-gradient-to-b from-blue-50 to-purple-50 dark:from-slate-800 dark:to-slate-900 border-2 border-dashed border-gray-300 dark:border-slate-700 rounded-full shadow-lg backdrop-blur-sm bg-opacity-95 dark:bg-opacity-95">
-              <div className="px-3 py-4">
+              <div className="px-1 py-3">
                 <div className="flex flex-col items-center gap-1">
                   {/* Models */}
                   <button

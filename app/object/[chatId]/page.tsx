@@ -353,50 +353,46 @@ export default function GenerateObjectPlaygroundPage({
     };
   }, [mounted, showFloatingNav]);
 
-  // IntersectionObserver for active section tracking
+  // Dual-sentinel IntersectionObserver for active section tracking
   useEffect(() => {
     if (!mounted) return;
 
-    const sections = [
-      { ref: modelSectionRef, key: 'models' as SectionKey },
-      { ref: schemaSectionRef, key: 'schemas' as SectionKey },
-      { ref: systemSectionRef, key: 'system' as SectionKey },
-      { ref: promptSectionRef, key: 'prompts' as SectionKey },
-      { ref: resultsSectionRef, key: 'results' as SectionKey },
-    ];
+    const sectionOrder: SectionKey[] = ['models', 'schemas', 'system', 'prompts', 'results'];
 
-    let debounceTimer: NodeJS.Timeout;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        clearTimeout(debounceTimer);
-
-        debounceTimer = setTimeout(() => {
-          // Find the first intersecting section
-          const intersecting = entries.find(entry => entry.isIntersecting);
-          if (intersecting) {
-            const sectionKey = intersecting.target.getAttribute('data-section') as SectionKey;
-            if (sectionKey) {
-              setActiveSection(sectionKey);
-            }
-          }
-        }, 200); // 200ms debounce to prevent rapid switching
+    const startObserver = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          const key = entry.target.getAttribute('data-section') as SectionKey;
+          if (key) setActiveSection(key);
+        }
       },
-      {
-        threshold: 0.1, // Lower threshold so results grid triggers easier
-        rootMargin: '-10% 0px -70% 0px' // Smaller top margin so results section activates sooner
-      }
+      { rootMargin: '-1px 0px 0px 0px', threshold: 0 }
     );
 
-    sections.forEach(({ ref }) => {
-      if (ref.current) {
-        observer.observe(ref.current);
-      }
-    });
+    const endObserver = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          const key = entry.target.getAttribute('data-section') as SectionKey;
+          if (!key) return;
+          const idx = sectionOrder.indexOf(key);
+          const next = sectionOrder[idx + 1] || key;
+          setActiveSection(next as SectionKey);
+        }
+      },
+      { rootMargin: '0px 0px -50% 0px', threshold: 0 }
+    );
+
+    const startSentinels = document.querySelectorAll<HTMLSpanElement>('.scroll-sentinel-start');
+    const endSentinels = document.querySelectorAll<HTMLSpanElement>('.scroll-sentinel-end');
+    startSentinels.forEach((s) => startObserver.observe(s));
+    endSentinels.forEach((s) => endObserver.observe(s));
 
     return () => {
-      clearTimeout(debounceTimer);
-      observer.disconnect();
+      window.removeEventListener('resize', () => setActiveSection('models'));
+      startSentinels.forEach((s) => startObserver.unobserve(s));
+      endSentinels.forEach((s) => endObserver.unobserve(s));
+      startObserver.disconnect();
+      endObserver.disconnect();
     };
   }, [mounted]);
 
@@ -897,6 +893,7 @@ export default function GenerateObjectPlaygroundPage({
       <div className="space-y-6">
         {/* Model Threads */}
         <div ref={modelSectionRef} data-section="models">
+          <span className="scroll-sentinel-start" data-section="models" />
           <ModelThreadSection
             threads={config.modelThreads}
             onAddThread={handleAddModelThread}
@@ -906,10 +903,12 @@ export default function GenerateObjectPlaygroundPage({
             copiedStates={copiedStates}
             onCopy={handleCopy}
           />
+          <span className="scroll-sentinel-end" data-section="models" />
         </div>
 
         {/* Schema Threads */}
         <div ref={schemaSectionRef} data-section="schemas">
+          <span className="scroll-sentinel-start" data-section="schemas" />
           <SchemaThreadSection
             threads={config.schemaThreads}
             onAddThread={handleAddSchemaThread}
@@ -919,10 +918,12 @@ export default function GenerateObjectPlaygroundPage({
             copiedStates={copiedStates}
             onCopy={handleCopy}
           />
+          <span className="scroll-sentinel-end" data-section="schemas" />
         </div>
 
         {/* System Prompt Threads */}
         <div ref={systemSectionRef} data-section="system">
+          <span className="scroll-sentinel-start" data-section="system" />
           <SystemPromptThreadSection
             threads={config.systemPromptThreads}
             onAddThread={handleAddSystemPromptThread}
@@ -932,10 +933,12 @@ export default function GenerateObjectPlaygroundPage({
             copiedStates={copiedStates}
             onCopy={handleCopy}
           />
+          <span className="scroll-sentinel-end" data-section="system" />
         </div>
 
         {/* Prompt Data Threads */}
         <div ref={promptSectionRef} data-section="prompts">
+          <span className="scroll-sentinel-start" data-section="prompts" />
           <PromptDataThreadSection
             threads={config.promptDataThreads}
             onAddThread={handleAddPromptDataThread}
@@ -945,11 +948,13 @@ export default function GenerateObjectPlaygroundPage({
             copiedStates={copiedStates}
             onCopy={handleCopy}
           />
+          <span className="scroll-sentinel-end" data-section="prompts" />
         </div>
       </div>
 
       {/* Results Grid */}
       <div ref={resultsSectionRef} data-section="results">
+        <span className="scroll-sentinel-start" data-section="results" />
         <Card className="border-purple-200 border-2">
           <CardHeader>
             <div className="flex items-center gap-2">
@@ -966,6 +971,7 @@ export default function GenerateObjectPlaygroundPage({
             />
           </CardContent>
         </Card>
+        <span className="scroll-sentinel-end" data-section="results" />
       </div>
     </div>
   );
