@@ -20,8 +20,8 @@ import {
   PromptDataThread,
 } from './types';
 import { PROVIDERS } from '@/lib/llm-providers';
-import { detectVariables, getVariableDefaults } from './utils';
-import { VariableInputs } from './VariableInputs';
+import { detectVariables, getVariableDefaults } from '@/components/prompt-playground/shared/utils';
+import { VariableInputs } from '@/components/prompt-playground/shared/VariableInputs';
 import { TitleInputWithAI } from '@/components/prompt-playground/shared/TitleInputWithAI';
 import { BatchTitleGenerator } from '@/components/prompt-playground/shared/BatchTitleGenerator';
 

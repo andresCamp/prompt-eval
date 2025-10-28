@@ -442,4 +442,59 @@ export const formatTestConfig = (
   userMessage: string
 ): string => {
   return `**Provider:** ${provider}\n**Model:** ${model}\n\n**System Prompt:**\n${systemPrompt}\n\n**Initial Message:**\n${initialMessage}\n\n**User Message:**\n${userMessage}`;
-}; 
+};
+
+/**
+ * Detect variables in the format {variableName} or ${variableName} from a text string
+ * @param text - The text to search for variables
+ * @returns Array of unique variable names found
+ */
+export function detectVariables(text: string): string[] {
+  // Pattern matches both {variable} and ${variable}
+  const variablePattern = /\$?\{([^}]+)\}/g;
+  const matches = text.matchAll(variablePattern);
+  const variables = new Set<string>();
+
+  for (const match of matches) {
+    variables.add(match[1].trim());
+  }
+
+  return Array.from(variables);
+}
+
+/**
+ * Replace variables in text with their corresponding values
+ * Supports both {variable} and ${variable} syntax
+ * @param text - The text containing {variable} or ${variable} placeholders
+ * @param variables - Object mapping variable names to their values
+ * @returns Text with variables replaced by their values
+ */
+export function replaceVariables(text: string, variables?: Record<string, string>): string {
+  if (!variables) return text;
+
+  // Replace both {variable} and ${variable} patterns
+  return text.replace(/\$?\{([^}]+)\}/g, (match, varName) => {
+    const trimmedName = varName.trim();
+    return variables[trimmedName] ?? match;
+  });
+}
+
+/**
+ * Get default values for variables, preserving existing values
+ * @param variableNames - Array of variable names detected in text
+ * @param existingVariables - Existing variable values to preserve
+ * @returns Record of variable names to values
+ */
+export function getVariableDefaults(
+  variableNames: string[],
+  existingVariables?: Record<string, string>
+): Record<string, string> {
+  const defaults: Record<string, string> = {};
+
+  for (const name of variableNames) {
+    // Preserve existing value if available, otherwise empty string
+    defaults[name] = existingVariables?.[name] ?? '';
+  }
+
+  return defaults;
+} 

@@ -51,6 +51,8 @@ export interface ImagePromptThread {
   format?: ImageFormat;
   version?: string;
   visible: boolean;
+  // Variables for prompt templating (supports {var} and ${var} syntax)
+  variables?: Record<string, string>;
 }
 
 export interface ImageExecutionThread {

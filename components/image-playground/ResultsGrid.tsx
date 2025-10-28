@@ -3,7 +3,7 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Play, Download, Lock, Unlock, X } from 'lucide-react';
+import { Loader2, Play, Download, Lock, Unlock, X, Copy, Check } from 'lucide-react';
 import { getImage } from '@/lib/image-storage';
 import type { ImageExecutionThread } from './types';
 import Image from 'next/image';
@@ -67,6 +67,7 @@ export function ResultsGrid({ threads, onRunThread, onDownload, onRunAll, anyRun
   const [lockedState, setLockedState] = useState<Record<string, boolean>>({});
   const [previewImage, setPreviewImage] = useState<{ image: string; title: string } | null>(null);
   const [loadingImages, setLoadingImages] = useState<Set<string>>(new Set());
+  const [copiedStates, setCopiedStates] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     async function loadImages() {
@@ -139,6 +140,35 @@ export function ResultsGrid({ threads, onRunThread, onDownload, onRunAll, anyRun
 
     setLockedState(prev => ({ ...prev, [thread.id]: true }));
     onToggleCache(thread.id, true, imageData);
+  };
+
+  const handleCopyImage = async (threadId: string, imageData: string) => {
+    try {
+      // Convert base64 to blob
+      const base64Data = imageData.replace(/^data:image\/\w+;base64,/, '');
+      const byteCharacters = atob(base64Data);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: 'image/png' });
+
+      // Copy to clipboard
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          'image/png': blob
+        })
+      ]);
+
+      // Show success state
+      setCopiedStates(prev => ({ ...prev, [threadId]: true }));
+      setTimeout(() => {
+        setCopiedStates(prev => ({ ...prev, [threadId]: false }));
+      }, 2000);
+    } catch (error) {
+      console.error('Failed to copy image to clipboard:', error);
+    }
   };
 
   return (
@@ -241,6 +271,27 @@ export function ResultsGrid({ threads, onRunThread, onDownload, onRunAll, anyRun
                 )}
               </CardContent>
               <CardFooter className="flex items-center justify-end gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  disabled={!effectiveImage}
+                  onClick={() => {
+                    if (effectiveImage) {
+                      void handleCopyImage(thread.id, effectiveImage);
+                    }
+                  }}
+                >
+                  {copiedStates[thread.id] ? (
+                    <>
+                      <Check className="mr-2 h-4 w-4 text-green-600" /> Copied
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="mr-2 h-4 w-4" /> Copy
+                    </>
+                  )}
+                </Button>
                 <Button
                   type="button"
                   size="sm"

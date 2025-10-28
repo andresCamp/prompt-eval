@@ -8,6 +8,7 @@ import {
   getRequiredImages
 } from './types';
 import { getImage } from '@/lib/image-storage';
+import { replaceVariables } from '@/components/prompt-playground/shared/utils';
 
 function extractDataUrl(image?: string): { data?: string; mimeType?: string } {
   if (!image) {
@@ -35,8 +36,11 @@ async function buildGooglePayload(thread: ImageExecutionThread): Promise<GoogleI
     referenceImage = imageData || undefined;
   }
 
+  // Replace variables in prompt
+  const processedPrompt = replaceVariables(promptThread.prompt, promptThread.variables);
+
   return {
-    prompt: promptThread.prompt,
+    prompt: processedPrompt,
     referenceImage,
     referenceImageMimeType: referenceImage ? 'image/png' : undefined
   };
@@ -48,6 +52,9 @@ async function buildRevePayload(thread: ImageExecutionThread) {
     aspect_ratio: promptThread.aspectRatio,
     version: promptThread.version
   };
+
+  // Replace variables in prompt
+  const processedPrompt = replaceVariables(promptThread.prompt, promptThread.variables);
 
   switch (promptThread.mode) {
     case 'remix': {
@@ -62,7 +69,7 @@ async function buildRevePayload(thread: ImageExecutionThread) {
       }
 
       const body: ReveRemixRequest = {
-        prompt: promptThread.prompt,
+        prompt: processedPrompt,
         reference_images: referenceImages,
         aspect_ratio: payloadBase.aspect_ratio,
         version: payloadBase.version
@@ -77,7 +84,7 @@ async function buildRevePayload(thread: ImageExecutionThread) {
       }
 
       const body: ReveEditRequest = {
-        edit_instruction: promptThread.prompt,
+        edit_instruction: processedPrompt,
         reference_image: referenceImage,
         version: payloadBase.version
       };
@@ -86,7 +93,7 @@ async function buildRevePayload(thread: ImageExecutionThread) {
     case 'create':
     default: {
       const body: ReveCreateRequest = {
-        prompt: promptThread.prompt,
+        prompt: processedPrompt,
         aspect_ratio: payloadBase.aspect_ratio,
         version: payloadBase.version
       };
