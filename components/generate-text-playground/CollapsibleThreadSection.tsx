@@ -6,7 +6,6 @@
 'use client';
 
 import React, { useMemo } from 'react';
-import { Textarea } from '@/components/ui/textarea';
 import { Brain, Cpu, FileJson } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
@@ -18,6 +17,7 @@ import { PROVIDERS } from '@/lib/llm-providers';
 import { detectVariables, getVariableDefaults } from '@/components/prompt-playground/shared/utils';
 import { VariableInputs } from '@/components/prompt-playground/shared/VariableInputs';
 import { CollapsibleThreadSection } from '@/components/prompt-playground/shared/CollapsibleThreadSection';
+import { CopyableTextarea } from '@/components/prompt-playground/shared/CopyableInput';
 
 // Get all models that support text generation (assume all language models do)
 const getTextGenerationModels = () => {
@@ -144,13 +144,16 @@ function SystemPromptContent({
 
   return (
     <div className="space-y-3">
-      <Textarea
+      <CopyableTextarea
         value={thread.prompt}
         onChange={(e) => {
           const newPrompt = e.target.value;
           const newVariables = detectVariables(newPrompt);
           const updatedVariables = getVariableDefaults(newVariables, thread.variables);
           onUpdate({ prompt: newPrompt, variables: updatedVariables });
+        }}
+        onClear={() => {
+          onUpdate({ prompt: '', variables: {} });
         }}
         placeholder="Enter system prompt..."
         className="text-sm h-32"
@@ -219,13 +222,16 @@ function PromptDataContent({
 
   return (
     <div className="space-y-3">
-      <Textarea
+      <CopyableTextarea
         value={thread.prompt}
         onChange={(e) => {
           const newPrompt = e.target.value;
           const newVariables = detectVariables(newPrompt);
           const updatedVariables = getVariableDefaults(newVariables, thread.variables);
           onUpdate({ prompt: newPrompt, variables: updatedVariables });
+        }}
+        onClear={() => {
+          onUpdate({ prompt: '', variables: {} });
         }}
         placeholder="Enter user prompt..."
         className="text-sm h-32"

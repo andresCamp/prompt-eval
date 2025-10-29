@@ -6,7 +6,6 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { Textarea } from '@/components/ui/textarea';
 import { Brain, Code, Cpu, FileJson, Sparkles, Loader2 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
@@ -20,6 +19,7 @@ import { PROVIDERS } from '@/lib/llm-providers';
 import { detectVariables, getVariableDefaults } from '@/components/prompt-playground/shared/utils';
 import { VariableInputs } from '@/components/prompt-playground/shared/VariableInputs';
 import { CollapsibleThreadSection } from '@/components/prompt-playground/shared/CollapsibleThreadSection';
+import { CopyableTextarea } from '@/components/prompt-playground/shared/CopyableInput';
 
 // Get all models that support object generation
 const getObjectGenerationModels = () => {
@@ -163,9 +163,10 @@ function SchemaContent({
     <div className="space-y-3">
       <div>
         <label className="text-xs text-gray-600">Schema Description</label>
-        <Textarea
+        <CopyableTextarea
           value={thread.schemaDescription || ''}
           onChange={(e) => onUpdate({ schemaDescription: e.target.value })}
+          onClear={() => onUpdate({ schemaDescription: '' })}
           placeholder="Describe what the schema should represent..."
           className="text-sm h-20"
           onClick={(e) => e.stopPropagation()}
@@ -192,9 +193,10 @@ function SchemaContent({
       </div>
       <div>
         <label className="text-xs text-gray-600">JSON Schema</label>
-        <Textarea
+        <CopyableTextarea
           value={thread.schema}
           onChange={(e) => onUpdate({ schema: e.target.value })}
+          onClear={() => onUpdate({ schema: '' })}
           placeholder='{"type": "object", "properties": {...}}'
           className="text-sm font-mono h-40"
           onClick={(e) => e.stopPropagation()}
@@ -258,13 +260,16 @@ function SystemPromptContent({
 
   return (
     <div className="space-y-3">
-      <Textarea
+      <CopyableTextarea
         value={thread.prompt}
         onChange={(e) => {
           const newPrompt = e.target.value;
           const newVariables = detectVariables(newPrompt);
           const updatedVariables = getVariableDefaults(newVariables, thread.variables);
           onUpdate({ prompt: newPrompt, variables: updatedVariables });
+        }}
+        onClear={() => {
+          onUpdate({ prompt: '', variables: {} });
         }}
         placeholder="Enter system prompt..."
         className="text-sm h-32"
@@ -333,13 +338,16 @@ function PromptDataContent({
 
   return (
     <div className="space-y-3">
-      <Textarea
+      <CopyableTextarea
         value={thread.prompt}
         onChange={(e) => {
           const newPrompt = e.target.value;
           const newVariables = detectVariables(newPrompt);
           const updatedVariables = getVariableDefaults(newVariables, thread.variables);
           onUpdate({ prompt: newPrompt, variables: updatedVariables });
+        }}
+        onClear={() => {
+          onUpdate({ prompt: '', variables: {} });
         }}
         placeholder="Enter user prompt..."
         className="text-sm h-32"

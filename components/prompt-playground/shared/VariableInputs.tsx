@@ -3,9 +3,9 @@
  */
 
 import React from 'react';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Variable } from 'lucide-react';
+import { CopyableInput } from './CopyableInput';
 
 interface VariableInputsProps {
   variableNames: string[];
@@ -41,10 +41,11 @@ export function VariableInputs({
             <Label htmlFor={`var-${name}`} className="text-xs text-gray-600">
               {`\${${name}}`}
             </Label>
-            <Input
+            <CopyableInput
               id={`var-${name}`}
               value={variables[name] || ''}
               onChange={(e) => handleVariableChange(name, e.target.value)}
+              onClear={() => handleVariableChange(name, '')}
               placeholder={`Enter value for ${name}`}
               className="text-sm"
               onClick={(e) => e.stopPropagation()}
