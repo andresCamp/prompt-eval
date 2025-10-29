@@ -35,6 +35,33 @@ export const ASPECT_RATIOS: { value: AspectRatio; label: string }[] = [
 ];
 
 // ---------------------------------------------
+// Variable Data Management
+// ---------------------------------------------
+
+/**
+ * Global row containing values for all variables across all Data Sets.
+ * Rows are position-indexed and values sync across Data Sets by variable name.
+ */
+export interface VariableRow {
+  id: string;
+  position: number;
+  values: Record<string, string>; // e.g., {color: 'red', animal: 'cat'}
+  visible: boolean; // Global visibility - affects all Data Sets
+}
+
+/**
+ * Data Set is a view of rows filtered by a unique combination of variables.
+ * Auto-created based on prompts' variable combinations.
+ * Example: Prompts using {color} link to Data Set [color]
+ *          Prompts using {color, animal} link to Data Set [color, animal]
+ */
+export interface DataSet {
+  id: string;
+  variableNames: string[]; // Sorted array: ['color'] or ['animal', 'color']
+  // Rows are computed from global VariableRow[] store
+}
+
+// ---------------------------------------------
 // Threading Types
 // ---------------------------------------------
 
@@ -52,13 +79,17 @@ export interface ImagePromptThread {
   version?: string;
   visible: boolean;
   // Variables for prompt templating (supports {var} and ${var} syntax)
+  // DEPRECATED: Use dataSetId instead - kept for backward compatibility
   variables?: Record<string, string>;
+  // Link to Data Set (auto-assigned based on detected variables)
+  dataSetId?: string;
 }
 
 export interface ImageExecutionThread {
   id: string;
   name: string;
   promptThread: ImagePromptThread;
+  rowId?: string; // Link to VariableRow for variable substitution
   visible: boolean;
   isRunning: boolean;
   result?: ImageGenerationResult;
@@ -113,9 +144,11 @@ export interface ReveEditRequest {
 export interface ImageGenerationConfig {
   promptThreads: ImagePromptThread[];
   executionThreads: ImageExecutionThread[];
+  rows: VariableRow[]; // Global row store for all variable values
   openSections: {
     prompts: boolean;
     results: boolean;
+    dataSets: boolean;
   };
 }
 
