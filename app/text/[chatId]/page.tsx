@@ -106,7 +106,8 @@ export default function GenerateTextPlaygroundPage({
               name: 'gpt-4o',
               provider: 'openai',
               model: 'gpt-4o',
-              visible: true
+              visible: true,
+              isExpanded: true
             }
           ],
           systemPromptThreads: [
@@ -114,7 +115,8 @@ export default function GenerateTextPlaygroundPage({
               id: generateId(),
               name: 'Default System',
               prompt: DEFAULT_SYSTEM_PROMPT,
-              visible: true
+              visible: true,
+              isExpanded: true
             }
           ],
           promptDataThreads: [
@@ -122,7 +124,8 @@ export default function GenerateTextPlaygroundPage({
               id: generateId(),
               name: 'Robot Dreams Story',
               prompt: DEFAULT_PROMPT,
-              visible: true
+              visible: true,
+              isExpanded: true
             }
           ],
           executionThreads: [],
@@ -316,7 +319,8 @@ export default function GenerateTextPlaygroundPage({
       name: `Model ${config.modelThreads.length + 1}`,
       provider: 'openai',
       model: 'gpt-4o',
-      visible: true
+      visible: true,
+      isExpanded: true
     };
     handleUpdateConfig({
       modelThreads: [...config.modelThreads, newThread]
@@ -342,7 +346,7 @@ export default function GenerateTextPlaygroundPage({
   const handleDuplicateModelThread = (id: string) => {
     const thread = config.modelThreads.find(t => t.id === id);
     if (thread) {
-      const newThread = { ...thread, id: generateId(), name: `${thread.name} (Copy)` };
+      const newThread = { ...thread, id: generateId(), name: `${thread.name} (Copy)`, isExpanded: true };
       handleUpdateConfig({
         modelThreads: [...config.modelThreads, newThread]
       });
@@ -356,7 +360,8 @@ export default function GenerateTextPlaygroundPage({
       id: generateId(),
       name: `System ${config.systemPromptThreads.length + 1}`,
       prompt: DEFAULT_SYSTEM_PROMPT,
-      visible: true
+      visible: true,
+      isExpanded: true
     };
     handleUpdateConfig({
       systemPromptThreads: [...config.systemPromptThreads, newThread]
@@ -382,7 +387,7 @@ export default function GenerateTextPlaygroundPage({
   const handleDuplicateSystemPromptThread = (id: string) => {
     const thread = config.systemPromptThreads.find(t => t.id === id);
     if (thread) {
-      const newThread = { ...thread, id: generateId(), name: `${thread.name} (Copy)` };
+      const newThread = { ...thread, id: generateId(), name: `${thread.name} (Copy)`, isExpanded: true };
       handleUpdateConfig({
         systemPromptThreads: [...config.systemPromptThreads, newThread]
       });
@@ -395,7 +400,8 @@ export default function GenerateTextPlaygroundPage({
       id: generateId(),
       name: `Prompt ${config.promptDataThreads.length + 1}`,
       prompt: DEFAULT_PROMPT,
-      visible: true
+      visible: true,
+      isExpanded: true
     };
     handleUpdateConfig({
       promptDataThreads: [...config.promptDataThreads, newThread]
@@ -421,7 +427,7 @@ export default function GenerateTextPlaygroundPage({
   const handleDuplicatePromptDataThread = (id: string) => {
     const thread = config.promptDataThreads.find(t => t.id === id);
     if (thread) {
-      const newThread = { ...thread, id: generateId(), name: `${thread.name} (Copy)` };
+      const newThread = { ...thread, id: generateId(), name: `${thread.name} (Copy)`, isExpanded: true };
       handleUpdateConfig({
         promptDataThreads: [...config.promptDataThreads, newThread]
       });

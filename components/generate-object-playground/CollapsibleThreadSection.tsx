@@ -1,18 +1,15 @@
 /**
  * @fileoverview Collapsible thread sections for GenerateObject
- * Maintains state when collapsed but allows collapsing for space management
+ * Uses shared CollapsibleThreadSection component with object-specific content
  */
 
 'use client';
 
-import React, { ReactNode, useState, useMemo, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
+import React, { useState, useMemo } from 'react';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Copy, Trash2, Brain, Code, Cpu, FileJson, Eye, EyeOff, ChevronDown, ChevronUp, Sparkles, Loader2, Undo2, GitBranchPlus, Check } from 'lucide-react';
+import { Brain, Code, Cpu, FileJson, Sparkles, Loader2 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import * as Collapsible from '@radix-ui/react-collapsible';
+import { Button } from '@/components/ui/button';
 import {
   GenerateObjectModelThread,
   SchemaThread,
@@ -22,13 +19,12 @@ import {
 import { PROVIDERS } from '@/lib/llm-providers';
 import { detectVariables, getVariableDefaults } from '@/components/prompt-playground/shared/utils';
 import { VariableInputs } from '@/components/prompt-playground/shared/VariableInputs';
-import { TitleInputWithAI } from '@/components/prompt-playground/shared/TitleInputWithAI';
-import { BatchTitleGenerator } from '@/components/prompt-playground/shared/BatchTitleGenerator';
+import { CollapsibleThreadSection } from '@/components/prompt-playground/shared/CollapsibleThreadSection';
 
 // Get all models that support object generation
 const getObjectGenerationModels = () => {
   const models: { provider: string; model: string; displayName: string }[] = [];
-  
+
   PROVIDERS.providers.forEach(provider => {
     provider.models.forEach(model => {
       if (model.capabilities.objectGeneration) {
@@ -40,196 +36,12 @@ const getObjectGenerationModels = () => {
       }
     });
   });
-  
+
   return models;
 };
 
 const OBJECT_GENERATION_MODELS = getObjectGenerationModels();
 const PROVIDER_OPTIONS = [...new Set(OBJECT_GENERATION_MODELS.map(m => m.provider))];
-
-interface BaseThreadSectionProps<T> {
-  title: string;
-  threads: T[];
-  icon: ReactNode;
-  borderColor: string;
-  onAddThread: () => void;
-  onUpdateThread: (id: string, updates: Partial<T>) => void;
-  onDeleteThread: (id: string) => void;
-  onDuplicateThread: (id: string) => void;
-  copiedStates: Record<string, boolean>;
-  onCopy: (text: string, key: string) => void;
-  renderContent: (thread: T, onUpdate: (updates: Partial<T>) => void) => ReactNode;
-  getThreadContent?: (thread: T) => string;
-  contentType?: string;
-  defaultOpen?: boolean;
-}
-
-type BaseThread = { id: string; name: string; visible: boolean; isExpanded?: boolean };
-
-function CollapsibleThreadSection<T extends BaseThread>({
-  title,
-  threads,
-  icon,
-  borderColor,
-  onAddThread,
-  onUpdateThread,
-  onDeleteThread,
-  onDuplicateThread,
-  copiedStates: _copiedStates,
-  onCopy: _onCopy,
-  renderContent,
-  getThreadContent,
-  contentType,
-  defaultOpen = true,
-}: BaseThreadSectionProps<T>) {
-  const [isOpen, setIsOpen] = useState(defaultOpen);
-  // These are used by child components through renderContent
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const copiedStates = _copiedStates;
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const onCopy = _onCopy;
-  const visibleThreads = threads.filter(t => t.visible);
-  const hiddenCount = threads.length - visibleThreads.length;
-  const applyUpdate = (thread: T, updates: Partial<T>) => {
-    onUpdateThread(thread.id, updates);
-  };
-
-  const cardCursor = isOpen ? 'cursor-n-resize' : 'cursor-s-resize';
-
-  return (
-    <Card className={`${borderColor} border-2`}>
-      <CardHeader
-        className={cardCursor}
-        onClick={() => setIsOpen(!isOpen)}
-      >
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            {icon}
-            <CardTitle>{title} ({threads.length})</CardTitle>
-            {hiddenCount > 0 && (
-              <span className="text-sm text-gray-500">({hiddenCount} hidden)</span>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            {getThreadContent && threads.length > 1 && (
-              <BatchTitleGenerator
-                threads={threads}
-                getThreadContent={getThreadContent}
-                contentType={contentType}
-                onUpdateThread={onUpdateThread}
-              />
-            )}
-            <ChevronDown className={`h-5 w-5 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-          </div>
-        </div>
-      </CardHeader>
-      {isOpen && (
-        <CardContent>
-          <div className="space-y-4">
-            <Button
-              onClick={(e) => {
-                e.stopPropagation();
-                onAddThread();
-              }}
-              variant="outline"
-              className="w-full border-dashed"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Add {title} Thread
-            </Button>
-            
-            <div className={`grid gap-4 ${threads.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
-              {threads.map((thread) => {
-                const isExpanded = thread.isExpanded ?? true; // Default to expanded
-
-                return (
-                  <Collapsible.Root
-                    key={thread.id}
-                    open={isExpanded}
-                    onOpenChange={(open) => {
-                      applyUpdate(thread, { isExpanded: open } as Partial<T>);
-                    }}
-                  >
-                    <div className={`border rounded-lg p-4 space-y-3 ${!thread.visible ? 'opacity-50' : ''}`}>
-                      <div className="flex items-center justify-between gap-2">
-                        <TitleInputWithAI
-                          value={thread.name}
-                          onChange={(value) => applyUpdate(thread, { name: value } as Partial<T>)}
-                          content={getThreadContent ? getThreadContent(thread) : ''}
-                          contentType={contentType}
-                          siblingTitles={threads.map(t => t.name)}
-                          placeholder="Thread name"
-                          className="flex-1"
-                        />
-                        <div className="flex items-center gap-1">
-                          <Collapsible.Trigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                              title={isExpanded ? "Collapse card" : "Expand card"}
-                            >
-                              {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                            </Button>
-                          </Collapsible.Trigger>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              const newVisible = !thread.visible;
-                              // Toggle visibility and auto-expand/collapse
-                              applyUpdate(thread, {
-                                visible: newVisible,
-                                isExpanded: newVisible
-                              } as Partial<T>);
-                            }}
-                            className="h-8 w-8"
-                            title={thread.visible ? "Hide from execution" : "Include in execution"}
-                          >
-                            {thread.visible ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onDuplicateThread(thread.id);
-                            }}
-                            className="h-8 w-8"
-                            title="Duplicate thread"
-                          >
-                            <GitBranchPlus className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onDeleteThread(thread.id);
-                            }}
-                            className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
-                            title="Delete thread"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                      <Collapsible.Content className="data-[state=open]:animate-slideDown data-[state=closed]:animate-slideUp">
-                        {renderContent(thread, (updates) => applyUpdate(thread, updates))}
-                      </Collapsible.Content>
-                    </div>
-                  </Collapsible.Root>
-                );
-              })}
-            </div>
-          </div>
-        </CardContent>
-      )}
-    </Card>
-  );
-}
-
 
 // Model Thread Section with Provider Selection
 export function ModelThreadSection({
@@ -265,7 +77,7 @@ export function ModelThreadSection({
       contentType="model"
       renderContent={(thread, onUpdate) => {
         const providerModels = OBJECT_GENERATION_MODELS.filter(m => m.provider === thread.provider);
-        
+
         return (
           <div className="space-y-3">
             <div>
@@ -274,8 +86,8 @@ export function ModelThreadSection({
                 value={thread.provider}
                 onValueChange={(value) => {
                   const firstModel = OBJECT_GENERATION_MODELS.find(m => m.provider === value);
-                  onUpdate({ 
-                    provider: value, 
+                  onUpdate({
+                    provider: value,
                     model: firstModel?.model || '',
                     name: firstModel?.model || value
                   });
@@ -321,167 +133,73 @@ export function ModelThreadSection({
 // Schema content component - separate to handle hooks properly
 function SchemaContent({
   thread,
-  onUpdate,
-  copiedStates,
-  onCopy,
+  onUpdate
 }: {
   thread: SchemaThread;
-  onUpdate: (updates: Partial<SchemaThread>) => void;
-  copiedStates: Record<string, boolean>;
-  onCopy: (text: string, key: string) => void;
+  onUpdate: (updates: Partial<SchemaThread>) => void
 }) {
-  const [isNormalizing, setIsNormalizing] = useState(false);
-  const [originalSchema, setOriginalSchema] = useState<string | null>(null);
-  const [validationError, setValidationError] = useState<string | null>(null);
+  const [isGeneratingSchema, setIsGeneratingSchema] = useState(false);
 
-  // Test schema validity when it changes
-  useEffect(() => {
-    if (!thread.schema.trim()) {
-      setValidationError(null);
-      return;
-    }
-
+  const handleGenerateSchema = async () => {
+    setIsGeneratingSchema(true);
     try {
-      const testFunction = new Function('z', `return ${thread.schema}`);
-      // Syntax is valid
-      setValidationError(null);
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : 'Invalid schema syntax';
-      setValidationError(errorMsg);
-    }
-  }, [thread.schema]);
-
-  // Auto-normalize on validation error (debounced)
-  useEffect(() => {
-    if (!validationError || isNormalizing || originalSchema) return;
-
-    const timer = setTimeout(() => {
-      handleNormalize(true);
-    }, 500);
-
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [validationError, isNormalizing, originalSchema]);
-
-  const handleNormalize = async (isAutomatic = false) => {
-    if (!thread.schema.trim()) return;
-
-    // Store original schema for undo
-    if (!originalSchema && !isAutomatic) {
-      setOriginalSchema(thread.schema);
-    } else if (!originalSchema && isAutomatic) {
-      setOriginalSchema(thread.schema);
-    }
-
-    setIsNormalizing(true);
-    try {
-      const response = await fetch('/api/normalize-schema', {
+      const response = await fetch('/api/generate-schema', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ schema: thread.schema }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ description: thread.schemaDescription })
       });
-
       const data = await response.json();
-      if (data.success && data.normalizedSchema) {
-        onUpdate({ schema: data.normalizedSchema });
-        if (!isAutomatic) {
-          setOriginalSchema(thread.schema);
-        }
-      } else {
-        console.error('Normalization failed:', data.error);
-        // Clear original on failure
-        setOriginalSchema(null);
+      if (data.success && data.schema) {
+        onUpdate({ schema: data.schema });
       }
     } catch (error) {
-      console.error('Error normalizing schema:', error);
-      setOriginalSchema(null);
+      console.error('Failed to generate schema:', error);
     } finally {
-      setIsNormalizing(false);
-    }
-  };
-
-  const handleUndo = () => {
-    if (originalSchema) {
-      onUpdate({ schema: originalSchema });
-      setOriginalSchema(null);
+      setIsGeneratingSchema(false);
     }
   };
 
   return (
     <div className="space-y-3">
-      <div className="relative">
+      <div>
+        <label className="text-xs text-gray-600">Schema Description</label>
         <Textarea
-          value={thread.schema}
-          onChange={(e) => {
-            onUpdate({ schema: e.target.value });
-            // Clear original when user manually edits after normalization
-            if (originalSchema) {
-              setOriginalSchema(null);
-            }
-          }}
-          placeholder="Enter Zod schema..."
-          className="font-mono text-xs h-40 pr-24"
+          value={thread.schemaDescription || ''}
+          onChange={(e) => onUpdate({ schemaDescription: e.target.value })}
+          placeholder="Describe what the schema should represent..."
+          className="text-sm h-20"
           onClick={(e) => e.stopPropagation()}
         />
         <Button
-          size="sm"
           variant="outline"
-          className="absolute top-2 right-12"
-          onClick={(e) => {
-            e.stopPropagation();
-            if (originalSchema) {
-              handleUndo();
-            } else {
-              handleNormalize();
-            }
-          }}
-          disabled={isNormalizing || !thread.schema.trim()}
-          title={originalSchema ? "Undo normalization" : "Normalize schema using AI"}
+          size="sm"
+          onClick={handleGenerateSchema}
+          disabled={isGeneratingSchema || !thread.schemaDescription}
+          className="mt-2 w-full"
         >
-          {isNormalizing ? (
+          {isGeneratingSchema ? (
             <>
-              <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-              Normalizing
-            </>
-          ) : originalSchema ? (
-            <>
-              <Undo2 className="h-3 w-3 mr-1" />
-              Undo
+              <Loader2 className="h-3 w-3 mr-2 animate-spin" />
+              Generating...
             </>
           ) : (
             <>
-              <Sparkles className="h-3 w-3 mr-1" />
-              Normalize
+              <Sparkles className="h-3 w-3 mr-2" />
+              Generate Schema
             </>
-          )}
-        </Button>
-        <Button
-          size="icon"
-          variant="ghost"
-          className="absolute top-2 right-2 h-8 w-8"
-          onClick={(e) => {
-            e.stopPropagation();
-            onCopy(thread.schema, `schema-${thread.id}`);
-          }}
-          disabled={!thread.schema.trim()}
-          title="Copy schema"
-        >
-          {copiedStates[`schema-${thread.id}`] ? (
-            <Check className="h-4 w-4 text-green-600" />
-          ) : (
-            <Copy className="h-4 w-4" />
           )}
         </Button>
       </div>
-      <Input
-        value={thread.schemaDescription || ''}
-        onChange={(e) => onUpdate({ schemaDescription: e.target.value })}
-        placeholder="Schema description (optional)"
-        className="text-sm"
-        onClick={(e) => e.stopPropagation()}
-      />
+      <div>
+        <label className="text-xs text-gray-600">JSON Schema</label>
+        <Textarea
+          value={thread.schema}
+          onChange={(e) => onUpdate({ schema: e.target.value })}
+          placeholder='{"type": "object", "properties": {...}}'
+          className="text-sm font-mono h-40"
+          onClick={(e) => e.stopPropagation()}
+        />
+      </div>
     </div>
   );
 }
@@ -519,7 +237,7 @@ export function SchemaThreadSection({
       getThreadContent={(thread) => thread.schema}
       contentType="schema"
       renderContent={(thread, onUpdate) => (
-        <SchemaContent thread={thread} onUpdate={onUpdate} copiedStates={copiedStates} onCopy={onCopy} />
+        <SchemaContent thread={thread} onUpdate={onUpdate} />
       )}
     />
   );
@@ -528,134 +246,30 @@ export function SchemaThreadSection({
 // System Prompt content component - separate to handle hooks properly
 function SystemPromptContent({
   thread,
-  onUpdate,
-  copiedStates,
-  onCopy,
+  onUpdate
 }: {
   thread: SystemPromptThread;
-  onUpdate: (updates: Partial<SystemPromptThread>) => void;
-  copiedStates: Record<string, boolean>;
-  onCopy: (text: string, key: string) => void;
+  onUpdate: (updates: Partial<SystemPromptThread>) => void
 }) {
-  const [isNormalizing, setIsNormalizing] = useState(false);
-  const [originalPrompt, setOriginalPrompt] = useState<string | null>(null);
-
   const detectedVariables = useMemo(
     () => detectVariables(thread.prompt),
     [thread.prompt]
   );
 
-  const handleNormalize = async () => {
-    if (!thread.prompt.trim()) return;
-
-    // Store original prompt for undo
-    setOriginalPrompt(thread.prompt);
-
-    setIsNormalizing(true);
-    try {
-      const response = await fetch('/api/normalize-prompt', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ prompt: thread.prompt }),
-      });
-
-      const data = await response.json();
-      if (data.success && data.normalizedPrompt) {
-        const newVariables = detectVariables(data.normalizedPrompt);
-        const updatedVariables = getVariableDefaults(newVariables, thread.variables);
-        onUpdate({ prompt: data.normalizedPrompt, variables: updatedVariables });
-      } else {
-        console.error('Normalization failed:', data.error);
-        setOriginalPrompt(null);
-      }
-    } catch (error) {
-      console.error('Error normalizing prompt:', error);
-      setOriginalPrompt(null);
-    } finally {
-      setIsNormalizing(false);
-    }
-  };
-
-  const handleUndo = () => {
-    if (originalPrompt) {
-      const newVariables = detectVariables(originalPrompt);
-      const updatedVariables = getVariableDefaults(newVariables, thread.variables);
-      onUpdate({ prompt: originalPrompt, variables: updatedVariables });
-      setOriginalPrompt(null);
-    }
-  };
-
   return (
     <div className="space-y-3">
-      <div className="relative">
-        <Textarea
-          value={thread.prompt}
-          onChange={(e) => {
-            const newPrompt = e.target.value;
-            const newVariables = detectVariables(newPrompt);
-            const updatedVariables = getVariableDefaults(newVariables, thread.variables);
-            onUpdate({ prompt: newPrompt, variables: updatedVariables });
-            // Clear original when user manually edits after normalization
-            if (originalPrompt) {
-              setOriginalPrompt(null);
-            }
-          }}
-          placeholder="Enter system prompt..."
-          className="text-sm h-32 pr-24"
-          onClick={(e) => e.stopPropagation()}
-        />
-        <Button
-          size="sm"
-          variant="outline"
-          className="absolute top-2 right-12"
-          onClick={(e) => {
-            e.stopPropagation();
-            if (originalPrompt) {
-              handleUndo();
-            } else {
-              handleNormalize();
-            }
-          }}
-          disabled={isNormalizing || !thread.prompt.trim()}
-          title={originalPrompt ? "Undo normalization" : "Improve prompt using AI"}
-        >
-          {isNormalizing ? (
-            <>
-              <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-              Improving
-            </>
-          ) : originalPrompt ? (
-            <>
-              <Undo2 className="h-3 w-3 mr-1" />
-              Undo
-            </>
-          ) : (
-            <>
-              <Sparkles className="h-3 w-3 mr-1" />
-              Improve
-            </>
-          )}
-        </Button>
-        <Button
-          size="icon"
-          variant="ghost"
-          className="absolute top-2 right-2 h-8 w-8"
-          onClick={(e) => {
-            e.stopPropagation();
-            onCopy(thread.prompt, `system-${thread.id}`);
-          }}
-          disabled={!thread.prompt.trim()}
-          title="Copy system prompt"
-        >
-          {copiedStates[`system-${thread.id}`] ? (
-            <Check className="h-4 w-4 text-green-600" />
-          ) : (
-            <Copy className="h-4 w-4" />
-          )}
-        </Button>
-      </div>
+      <Textarea
+        value={thread.prompt}
+        onChange={(e) => {
+          const newPrompt = e.target.value;
+          const newVariables = detectVariables(newPrompt);
+          const updatedVariables = getVariableDefaults(newVariables, thread.variables);
+          onUpdate({ prompt: newPrompt, variables: updatedVariables });
+        }}
+        placeholder="Enter system prompt..."
+        className="text-sm h-32"
+        onClick={(e) => e.stopPropagation()}
+      />
       <VariableInputs
         variableNames={detectedVariables}
         variables={thread.variables}
@@ -698,7 +312,7 @@ export function SystemPromptThreadSection({
       getThreadContent={(thread) => thread.prompt}
       contentType="system-prompt"
       renderContent={(thread, onUpdate) => (
-        <SystemPromptContent thread={thread} onUpdate={onUpdate} copiedStates={copiedStates} onCopy={onCopy} />
+        <SystemPromptContent thread={thread} onUpdate={onUpdate} />
       )}
     />
   );
@@ -707,14 +321,10 @@ export function SystemPromptThreadSection({
 // Prompt Data content component - separate to handle hooks properly
 function PromptDataContent({
   thread,
-  onUpdate,
-  copiedStates,
-  onCopy,
+  onUpdate
 }: {
   thread: PromptDataThread;
-  onUpdate: (updates: Partial<PromptDataThread>) => void;
-  copiedStates: Record<string, boolean>;
-  onCopy: (text: string, key: string) => void;
+  onUpdate: (updates: Partial<PromptDataThread>) => void
 }) {
   const detectedVariables = useMemo(
     () => detectVariables(thread.prompt),
@@ -723,37 +333,18 @@ function PromptDataContent({
 
   return (
     <div className="space-y-3">
-      <div className="relative">
-        <Textarea
-          value={thread.prompt}
-          onChange={(e) => {
-            const newPrompt = e.target.value;
-            const newVariables = detectVariables(newPrompt);
-            const updatedVariables = getVariableDefaults(newVariables, thread.variables);
-            onUpdate({ prompt: newPrompt, variables: updatedVariables });
-          }}
-          placeholder="Enter prompt or JSON data..."
-          className="font-mono text-xs h-40 pr-12"
-          onClick={(e) => e.stopPropagation()}
-        />
-        <Button
-          size="icon"
-          variant="ghost"
-          className="absolute top-2 right-2 h-8 w-8"
-          onClick={(e) => {
-            e.stopPropagation();
-            onCopy(thread.prompt, `prompt-${thread.id}`);
-          }}
-          disabled={!thread.prompt.trim()}
-          title="Copy prompt data"
-        >
-          {copiedStates[`prompt-${thread.id}`] ? (
-            <Check className="h-4 w-4 text-green-600" />
-          ) : (
-            <Copy className="h-4 w-4" />
-          )}
-        </Button>
-      </div>
+      <Textarea
+        value={thread.prompt}
+        onChange={(e) => {
+          const newPrompt = e.target.value;
+          const newVariables = detectVariables(newPrompt);
+          const updatedVariables = getVariableDefaults(newVariables, thread.variables);
+          onUpdate({ prompt: newPrompt, variables: updatedVariables });
+        }}
+        placeholder="Enter user prompt..."
+        className="text-sm h-32"
+        onClick={(e) => e.stopPropagation()}
+      />
       <VariableInputs
         variableNames={detectedVariables}
         variables={thread.variables}
@@ -783,7 +374,7 @@ export function PromptDataThreadSection({
 }) {
   return (
     <CollapsibleThreadSection
-      title="Prompt Data"
+      title="Prompts"
       threads={threads}
       icon={<FileJson className="h-5 w-5 text-orange-600" />}
       borderColor="border-orange-200"
@@ -794,9 +385,9 @@ export function PromptDataThreadSection({
       copiedStates={copiedStates}
       onCopy={onCopy}
       getThreadContent={(thread) => thread.prompt}
-      contentType="prompt-data"
+      contentType="prompt"
       renderContent={(thread, onUpdate) => (
-        <PromptDataContent thread={thread} onUpdate={onUpdate} copiedStates={copiedStates} onCopy={onCopy} />
+        <PromptDataContent thread={thread} onUpdate={onUpdate} />
       )}
     />
   );
