@@ -5,10 +5,13 @@ import {
   ReveCreateRequest,
   ReveEditRequest,
   ReveRemixRequest,
+  VariableRow,
   getRequiredImages
 } from './types';
 import { getImage } from '@/lib/image-storage';
+import { replaceVariables } from '@/components/prompt-playground/shared/utils';
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function extractDataUrl(image?: string): { data?: string; mimeType?: string } {
   if (!image) {
     return { data: undefined, mimeType: undefined };
@@ -26,7 +29,7 @@ function extractDataUrl(image?: string): { data?: string; mimeType?: string } {
   };
 }
 
-async function buildGooglePayload(thread: ImageExecutionThread): Promise<GoogleImageRequest> {
+async function buildGooglePayload(thread: ImageExecutionThread, rowValues?: Record<string, string>): Promise<GoogleImageRequest> {
   const { promptThread } = thread;
   let referenceImage: string | undefined;
 
@@ -35,19 +38,25 @@ async function buildGooglePayload(thread: ImageExecutionThread): Promise<GoogleI
     referenceImage = imageData || undefined;
   }
 
+  // Replace variables in prompt (use row values if available, fallback to thread variables for backward compat)
+  const processedPrompt = replaceVariables(promptThread.prompt, rowValues ?? promptThread.variables);
+
   return {
-    prompt: promptThread.prompt,
+    prompt: processedPrompt,
     referenceImage,
     referenceImageMimeType: referenceImage ? 'image/png' : undefined
   };
 }
 
-async function buildRevePayload(thread: ImageExecutionThread) {
+async function buildRevePayload(thread: ImageExecutionThread, rowValues?: Record<string, string>) {
   const { promptThread } = thread;
   const payloadBase = {
     aspect_ratio: promptThread.aspectRatio,
     version: promptThread.version
   };
+
+  // Replace variables in prompt (use row values if available, fallback to thread variables for backward compat)
+  const processedPrompt = replaceVariables(promptThread.prompt, rowValues ?? promptThread.variables);
 
   switch (promptThread.mode) {
     case 'remix': {
@@ -62,7 +71,7 @@ async function buildRevePayload(thread: ImageExecutionThread) {
       }
 
       const body: ReveRemixRequest = {
-        prompt: promptThread.prompt,
+        prompt: processedPrompt,
         reference_images: referenceImages,
         aspect_ratio: payloadBase.aspect_ratio,
         version: payloadBase.version
@@ -77,7 +86,7 @@ async function buildRevePayload(thread: ImageExecutionThread) {
       }
 
       const body: ReveEditRequest = {
-        edit_instruction: promptThread.prompt,
+        edit_instruction: processedPrompt,
         reference_image: referenceImage,
         version: payloadBase.version
       };
@@ -86,7 +95,7 @@ async function buildRevePayload(thread: ImageExecutionThread) {
     case 'create':
     default: {
       const body: ReveCreateRequest = {
-        prompt: promptThread.prompt,
+        prompt: processedPrompt,
         aspect_ratio: payloadBase.aspect_ratio,
         version: payloadBase.version
       };
@@ -95,7 +104,10 @@ async function buildRevePayload(thread: ImageExecutionThread) {
   }
 }
 
-export async function runImageExecution(thread: ImageExecutionThread): Promise<ImageGenerationResult> {
+export async function runImageExecution(
+  thread: ImageExecutionThread,
+  rows: VariableRow[] = []
+): Promise<ImageGenerationResult> {
   const provider = thread.promptThread.provider;
   let endpoint: string;
   let body: unknown;
@@ -109,11 +121,16 @@ export async function runImageExecution(thread: ImageExecutionThread): Promise<I
     };
   }
 
+  // Get row values if this thread is linked to a row
+  const rowValues = thread.rowId
+    ? rows.find(r => r.id === thread.rowId)?.values
+    : undefined;
+
   if (provider === 'google') {
     endpoint = '/api/image/google';
-    body = await buildGooglePayload(thread);
+    body = await buildGooglePayload(thread, rowValues);
   } else {
-    const config = await buildRevePayload(thread);
+    const config = await buildRevePayload(thread, rowValues);
     endpoint = config.endpoint;
     body = config.body;
   }

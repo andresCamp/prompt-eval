@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Copy, Trash2, Eye, EyeOff, ChevronDown } from 'lucide-react';
+import { Plus, Copy, Trash2, Eye, EyeOff, ChevronDown, GitBranchPlus, Check } from 'lucide-react';
 import {
   ASPECT_RATIOS,
   IMAGE_PROVIDERS,
@@ -17,8 +17,9 @@ import {
 } from './types';
 import { ImageUpload } from './ImageUpload';
 import { getRequiredImages } from './types';
-import { generateId } from '@/components/prompt-playground/shared/utils';
+import { generateId, detectVariables, getVariableDefaults } from '@/components/prompt-playground/shared/utils';
 import { releaseImage } from '@/lib/image-storage';
+import { VariableInputs } from '@/components/prompt-playground/shared/VariableInputs';
 
 interface BaseThread {
   id: string;
@@ -111,8 +112,9 @@ function CollapsibleThreadSection<T extends BaseThread>({
                       size="icon"
                       onClick={() => onDuplicateThread(thread.id)}
                       className="h-8 w-8"
+                      title="Duplicate thread"
                     >
-                      <Copy className="h-4 w-4" />
+                      <GitBranchPlus className="h-4 w-4" />
                     </Button>
                     <Button
                       type="button"
@@ -240,6 +242,9 @@ export function PromptThreadSection({
         const required = getRequiredImages(thread.provider, thread.mode);
         const imageIds = thread.referenceImageIds || [];
 
+        // Detect variables in the prompt (called directly, not memoized due to render prop context)
+        const detectedVariables = detectVariables(thread.prompt);
+
         const handleImageIdsChange = (newImageIds: string[]) => {
           onUpdate({ referenceImageIds: newImageIds });
         };
@@ -286,22 +291,40 @@ export function PromptThreadSection({
               mode={thread.mode}
               onChange={(value) => onUpdate({ mode: value })}
             />
-            <Textarea
-              value={thread.prompt}
-              placeholder="Describe the image you want to generate"
-              rows={5}
-              onChange={event => onUpdate({ prompt: event.target.value })}
-            />
-            <div className="flex justify-end">
+            <div className="relative">
+              <Textarea
+                value={thread.prompt}
+                placeholder="Describe the image you want to generate"
+                rows={5}
+                onChange={event => {
+                  const newPrompt = event.target.value;
+                  const newVariables = detectVariables(newPrompt);
+                  const updatedVariables = getVariableDefaults(newVariables, thread.variables);
+                  onUpdate({ prompt: newPrompt, variables: updatedVariables });
+                }}
+                className="pr-12"
+              />
               <Button
                 type="button"
                 variant="ghost"
-                size="sm"
-                onClick={() => onCopy(thread.prompt, thread.id)}
+                size="icon"
+                className="absolute top-2 right-2 h-8 w-8"
+                onClick={() => onCopy(thread.prompt, `prompt-${thread.id}`)}
+                disabled={!thread.prompt.trim()}
+                title="Copy prompt"
               >
-                {copiedStates[thread.id] ? 'Copied!' : 'Copy prompt'}
+                {copiedStates[`prompt-${thread.id}`] ? (
+                  <Check className="h-4 w-4 text-green-600" />
+                ) : (
+                  <Copy className="h-4 w-4" />
+                )}
               </Button>
             </div>
+            <VariableInputs
+              variableNames={detectedVariables}
+              variables={thread.variables}
+              onVariableChange={(variables) => onUpdate({ variables })}
+            />
             <ImageUpload
               imageIds={imageIds}
               maxImages={required.max}

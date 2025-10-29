@@ -51,9 +51,11 @@ export function createDefaultConfig(): ImageGenerationConfig {
   return {
     promptThreads,
     executionThreads: [],
+    rows: [], // Global row store starts empty
     openSections: {
       prompts: true,
-      results: true
+      results: true,
+      dataSets: false, // Collapsed by default
     }
   };
 }

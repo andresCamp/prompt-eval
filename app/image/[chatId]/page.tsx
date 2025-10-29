@@ -15,13 +15,22 @@ import { Button } from '@/components/ui/button';
 import { imageConfigAtomFamily } from '@/lib/atoms/image-playground';
 import { clearOldImages, saveImage, deleteImage, getImage } from '@/lib/image-storage';
 import { PromptThreadSection } from '@/components/image-playground/ThreadSection';
+import { DataSetsSection } from '@/components/image-playground/DataSetsSection';
 import { ResultsGrid } from '@/components/image-playground/ResultsGrid';
 import { runImageExecution } from '@/components/image-playground/client';
-import { buildExecutionThreads, updateExecutionThread } from '@/components/image-playground/utils';
+import {
+  buildExecutionThreads,
+  updateExecutionThread,
+  computeDataSets,
+  getDataSetForPrompt,
+  ensureFirstRow
+} from '@/components/image-playground/utils';
+import { detectVariables } from '@/components/prompt-playground/shared/utils';
 import type {
   ImageGenerationConfig,
   ImagePromptThread,
-  ImageExecutionThread
+  ImageExecutionThread,
+  VariableRow
 } from '@/components/image-playground/types';
 import { Image as ImageIcon, Loader2, Play } from 'lucide-react';
 
@@ -58,7 +67,7 @@ export default function ImagePlaygroundPage({ params }: { params: ParamsPromise 
     if ((config.executionThreads.length === 0 || hasLegacyThreads) && config.promptThreads.length > 0) {
       setConfig(prev => {
         if (!prev) return prev;
-        const executionThreads = buildExecutionThreads(prev.promptThreads, prev.executionThreads);
+        const executionThreads = buildExecutionThreads(prev.promptThreads, prev.executionThreads, prev.rows);
         if (executionThreads.length === 0) return prev;
         return { ...prev, executionThreads };
       });
@@ -71,7 +80,8 @@ export default function ImagePlaygroundPage({ params }: { params: ParamsPromise 
       const next = updater(prev);
       const executionThreads = buildExecutionThreads(
         next.promptThreads,
-        prev.executionThreads
+        prev.executionThreads,
+        next.rows
       );
       return { ...next, executionThreads };
     });
@@ -94,10 +104,33 @@ export default function ImagePlaygroundPage({ params }: { params: ParamsPromise 
   };
 
   const handlePromptThreadsChange = (threads: ImagePromptThread[]) => {
-    updateStructure(prev => ({
-      ...prev,
-      promptThreads: threads,
-    }));
+    updateStructure(prev => {
+      // Auto-link prompts to Data Sets and ensure first row exists
+      const dataSets = computeDataSets(threads);
+      const linkedThreads = threads.map(thread => {
+        const dataSet = getDataSetForPrompt(thread, dataSets);
+        return {
+          ...thread,
+          dataSetId: dataSet?.id,
+        };
+      });
+
+      // Ensure first row exists if any variables detected
+      const hasVariables = threads.some(t => detectVariables(t.prompt).length > 0);
+      const updatedRows = hasVariables && prev.rows.length === 0
+        ? ensureFirstRow(prev.rows, detectVariables(threads[0]?.prompt || ''))
+        : prev.rows;
+
+      return {
+        ...prev,
+        promptThreads: linkedThreads,
+        rows: updatedRows,
+      };
+    });
+  };
+
+  const handleRowsChange = (rows: VariableRow[]) => {
+    setConfig(prev => (prev ? { ...prev, rows } : prev));
   };
 
   const handleRunThread = async (threadId: string) => {
@@ -112,7 +145,7 @@ export default function ImagePlaygroundPage({ params }: { params: ParamsPromise 
     updateExecution(threadId, { isRunning: true });
 
     try {
-      const result = await runImageExecution(thread);
+      const result = await runImageExecution(thread, config.rows);
 
       // If there was a cached image, delete it from IndexedDB now that we have a new one
       if (hadCachedImage) {
@@ -311,6 +344,21 @@ export default function ImagePlaygroundPage({ params }: { params: ParamsPromise 
           onThreadsChange={handlePromptThreadsChange}
           copiedStates={copiedStates}
           onCopy={handleCopy}
+        />
+
+        <DataSetsSection
+          dataSets={computeDataSets(config.promptThreads)}
+          rows={config.rows}
+          prompts={config.promptThreads}
+          onRowsChange={handleRowsChange}
+          isOpen={config.openSections.dataSets}
+          onToggle={() =>
+            setConfig(prev =>
+              prev
+                ? { ...prev, openSections: { ...prev.openSections, dataSets: !prev.openSections.dataSets } }
+                : prev
+            )
+          }
         />
       </div>
 

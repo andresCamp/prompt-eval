@@ -1,15 +1,12 @@
 /**
  * @fileoverview Collapsible thread sections for GenerateText
- * Maintains state when collapsed but allows collapsing for space management
+ * Uses shared CollapsibleThreadSection component with text-specific content
  */
 
 'use client';
 
-import React, { ReactNode, useState, useMemo } from 'react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Textarea } from '@/components/ui/textarea';
-import { Plus, Copy, Trash2, Brain, Cpu, MessageSquare, Eye, EyeOff, ChevronDown } from 'lucide-react';
+import React, { useMemo } from 'react';
+import { Brain, Cpu, FileJson } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   GenerateTextModelThread,
@@ -17,15 +14,15 @@ import {
   PromptDataThread,
 } from './types';
 import { PROVIDERS } from '@/lib/llm-providers';
-import { detectVariables, getVariableDefaults } from '@/components/generate-object-playground/utils';
-import { VariableInputs } from '@/components/generate-object-playground/VariableInputs';
-import { TitleInputWithAI } from '@/components/prompt-playground/shared/TitleInputWithAI';
-import { BatchTitleGenerator } from '@/components/prompt-playground/shared/BatchTitleGenerator';
+import { detectVariables, getVariableDefaults } from '@/components/prompt-playground/shared/utils';
+import { VariableInputs } from '@/components/prompt-playground/shared/VariableInputs';
+import { CollapsibleThreadSection } from '@/components/prompt-playground/shared/CollapsibleThreadSection';
+import { CopyableTextarea } from '@/components/prompt-playground/shared/CopyableInput';
 
 // Get all models that support text generation (assume all language models do)
 const getTextGenerationModels = () => {
   const models: { provider: string; model: string; displayName: string }[] = [];
-  
+
   PROVIDERS.providers.forEach(provider => {
     provider.models.forEach(model => {
       // Text generation is supported by all language models (those with objectGeneration or invoke: "language")
@@ -38,159 +35,12 @@ const getTextGenerationModels = () => {
       }
     });
   });
-  
+
   return models;
 };
 
 const TEXT_GENERATION_MODELS = getTextGenerationModels();
 const PROVIDER_OPTIONS = [...new Set(TEXT_GENERATION_MODELS.map(m => m.provider))];
-
-interface BaseThreadSectionProps<T> {
-  title: string;
-  threads: T[];
-  icon: ReactNode;
-  borderColor: string;
-  onAddThread: () => void;
-  onUpdateThread: (id: string, updates: Partial<T>) => void;
-  onDeleteThread: (id: string) => void;
-  onDuplicateThread: (id: string) => void;
-  copiedStates: Record<string, boolean>;
-  onCopy: (text: string, key: string) => void;
-  renderContent: (thread: T, onUpdate: (updates: Partial<T>) => void) => ReactNode;
-  getThreadContent?: (thread: T) => string;
-  contentType?: string;
-  defaultOpen?: boolean;
-}
-
-type BaseThread = { id: string; name: string; visible: boolean };
-
-function CollapsibleThreadSection<T extends BaseThread>({
-  title,
-  threads,
-  icon,
-  borderColor,
-  onAddThread,
-  onUpdateThread,
-  onDeleteThread,
-  onDuplicateThread,
-  copiedStates: _copiedStates,
-  onCopy: _onCopy,
-  renderContent,
-  getThreadContent,
-  contentType,
-  defaultOpen = true,
-}: BaseThreadSectionProps<T>) {
-  const [isOpen, setIsOpen] = useState(defaultOpen);
-  void _copiedStates;
-  void _onCopy;
-  const visibleThreads = threads.filter(t => t.visible);
-  const hiddenCount = threads.length - visibleThreads.length;
-  const applyUpdate = (thread: T, updates: Partial<T>) => {
-    onUpdateThread(thread.id, updates);
-  };
-
-  return (
-    <Card className={`${borderColor} border-2`}>
-      <CardHeader 
-        className="cursor-pointer"
-        onClick={() => setIsOpen(!isOpen)}
-      >
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            {icon}
-            <CardTitle>{title} ({threads.length})</CardTitle>
-            {hiddenCount > 0 && (
-              <span className="text-sm text-gray-500">({hiddenCount} hidden)</span>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            {getThreadContent && threads.length > 1 && (
-              <BatchTitleGenerator
-                threads={threads}
-                getThreadContent={getThreadContent}
-                contentType={contentType}
-                onUpdateThread={onUpdateThread}
-              />
-            )}
-            <ChevronDown className={`h-5 w-5 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-          </div>
-        </div>
-      </CardHeader>
-      {isOpen && (
-        <CardContent>
-          <div className="space-y-4">
-            <Button
-              onClick={(e) => {
-                e.stopPropagation();
-                onAddThread();
-              }}
-              variant="outline"
-              className="w-full border-dashed"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Add {title} Thread
-            </Button>
-            
-            <div className={`grid gap-4 ${threads.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
-              {threads.map((thread) => (
-                <div key={thread.id} className={`border rounded-lg p-4 space-y-3 ${!thread.visible ? 'opacity-50' : ''}`}>
-                  <div className="flex items-center justify-between gap-2">
-                    <TitleInputWithAI
-                      value={thread.name}
-                      onChange={(value) => applyUpdate(thread, { name: value } as Partial<T>)}
-                      content={getThreadContent ? getThreadContent(thread) : ''}
-                      contentType={contentType}
-                      siblingTitles={threads.map(t => t.name)}
-                      placeholder="Thread name"
-                      className="flex-1"
-                    />
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          applyUpdate(thread, { visible: !thread.visible } as Partial<T>);
-                        }}
-                        className="h-8 w-8"
-                      >
-                        {thread.visible ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onDuplicateThread(thread.id);
-                        }}
-                        className="h-8 w-8"
-                      >
-                        <Copy className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onDeleteThread(thread.id);
-                        }}
-                        className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
-                        title="Delete thread"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                  {renderContent(thread, (updates) => applyUpdate(thread, updates))}
-                </div>
-              ))}
-            </div>
-          </div>
-        </CardContent>
-      )}
-    </Card>
-  );
-}
 
 // Model Thread Section with Provider Selection
 export function TextModelThreadSection({
@@ -226,7 +76,7 @@ export function TextModelThreadSection({
       contentType="model"
       renderContent={(thread, onUpdate) => {
         const providerModels = TEXT_GENERATION_MODELS.filter(m => m.provider === thread.provider);
-        
+
         return (
           <div className="space-y-3">
             <div>
@@ -235,8 +85,8 @@ export function TextModelThreadSection({
                 value={thread.provider}
                 onValueChange={(value) => {
                   const firstModel = TEXT_GENERATION_MODELS.find(m => m.provider === value);
-                  onUpdate({ 
-                    provider: value, 
+                  onUpdate({
+                    provider: value,
                     model: firstModel?.model || '',
                     name: firstModel?.model || value
                   });
@@ -294,13 +144,16 @@ function SystemPromptContent({
 
   return (
     <div className="space-y-3">
-      <Textarea
+      <CopyableTextarea
         value={thread.prompt}
         onChange={(e) => {
           const newPrompt = e.target.value;
           const newVariables = detectVariables(newPrompt);
           const updatedVariables = getVariableDefaults(newVariables, thread.variables);
           onUpdate({ prompt: newPrompt, variables: updatedVariables });
+        }}
+        onClear={() => {
+          onUpdate({ prompt: '', variables: {} });
         }}
         placeholder="Enter system prompt..."
         className="text-sm h-32"
@@ -369,13 +222,16 @@ function PromptDataContent({
 
   return (
     <div className="space-y-3">
-      <Textarea
+      <CopyableTextarea
         value={thread.prompt}
         onChange={(e) => {
           const newPrompt = e.target.value;
           const newVariables = detectVariables(newPrompt);
           const updatedVariables = getVariableDefaults(newVariables, thread.variables);
           onUpdate({ prompt: newPrompt, variables: updatedVariables });
+        }}
+        onClear={() => {
+          onUpdate({ prompt: '', variables: {} });
         }}
         placeholder="Enter user prompt..."
         className="text-sm h-32"
@@ -410,9 +266,9 @@ export function TextPromptDataThreadSection({
 }) {
   return (
     <CollapsibleThreadSection
-      title="User Prompts"
+      title="Prompts"
       threads={threads}
-      icon={<MessageSquare className="h-5 w-5 text-orange-600" />}
+      icon={<FileJson className="h-5 w-5 text-orange-600" />}
       borderColor="border-orange-200"
       onAddThread={onAddThread}
       onUpdateThread={onUpdateThread}
@@ -421,7 +277,7 @@ export function TextPromptDataThreadSection({
       copiedStates={copiedStates}
       onCopy={onCopy}
       getThreadContent={(thread) => thread.prompt}
-      contentType="user-prompt"
+      contentType="prompt"
       renderContent={(thread, onUpdate) => (
         <PromptDataContent thread={thread} onUpdate={onUpdate} />
       )}

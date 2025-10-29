@@ -9,6 +9,7 @@ export interface GenerateTextModelThread {
   provider: string;
   model: string;
   visible: boolean;
+  isExpanded?: boolean;
 }
 
 export interface SystemPromptThread {
@@ -17,6 +18,7 @@ export interface SystemPromptThread {
   prompt: string; // System prompt to guide the text generation
   variables?: Record<string, string>; // Variable values for ${variable} placeholders
   visible: boolean;
+  isExpanded?: boolean;
 }
 
 export interface PromptDataThread {
@@ -25,6 +27,7 @@ export interface PromptDataThread {
   prompt: string; // The input prompt for text generation
   variables?: Record<string, string>; // Variable values for ${variable} placeholders
   visible: boolean;
+  isExpanded?: boolean;
 }
 
 export interface GenerateTextExecutionThread {

@@ -148,13 +148,13 @@ export class SnapshotCleanup {
     return result;
   }
 
-  private isThreadActive(key: string): boolean {
+  private isThreadActive(_key: string): boolean {
     // Check if thread is still referenced in the UI
     // This would be implemented based on your actual UI state management
     return false;
   }
 
-  private isCellActive(key: string): boolean {
+  private isCellActive(_key: string): boolean {
     // Check if cell is still referenced in the results grid
     // This would be implemented based on your actual UI state management
     return false;
@@ -173,7 +173,7 @@ export class SnapshotCleanup {
     return orphaned;
   }
 
-  private isSnapshotReferenced(key: string): boolean {
+  private isSnapshotReferenced(_key: string): boolean {
     // Check if snapshot is referenced by any active component
     // This would need to be implemented based on your actual component structure
     return false;

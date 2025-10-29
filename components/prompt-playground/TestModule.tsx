@@ -71,9 +71,11 @@ export function TestModule({
     });
   };
 
+  const cardCursor = module.openSections.main ? 'cursor-n-resize' : 'cursor-s-resize';
+
   return (
-    <Card 
-      className="cursor-pointer hover:bg-muted transition-colors"
+    <Card
+      className={`${cardCursor} hover:bg-muted transition-colors`}
       onClick={toggleMainSection}
     >
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
