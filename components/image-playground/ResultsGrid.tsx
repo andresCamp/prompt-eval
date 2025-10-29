@@ -103,6 +103,7 @@ export function ResultsGrid({ threads, onRunThread, onDownload, onRunAll, anyRun
       }
     }
     void loadImages();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [threads]);
 
   useEffect(() => {

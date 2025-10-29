@@ -513,6 +513,7 @@ function ThreadCardWrapper<TThread, TResult>(props: {
 
   const handleToggleLock = () => {
     if (!isLocked) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       lockWith(buildSnapshot(thread) as any);
     } else {
       unlock();

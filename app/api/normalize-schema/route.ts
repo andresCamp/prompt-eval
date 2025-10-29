@@ -109,6 +109,7 @@ export async function POST(req: Request) {
     // Try to validate the schema is compilable (optional validation)
     try {
       // This is just a basic syntax check
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const testFunction = new Function('z', `return ${normalizedSchema}`);
       // We don't actually execute it with real Zod, just check syntax
     } catch (syntaxError) {

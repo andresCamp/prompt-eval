@@ -76,10 +76,9 @@ export default function GenerateTextPlaygroundPage({
     isExiting,
     isToggling,
     activeSection,
-    setActiveSection,
     handleToggleNav,
   } = useFloatingNav({
-    horizontalNavRef,
+    horizontalNavRef: horizontalNavRef as React.RefObject<HTMLDivElement>,
     sectionKeys: ['models', 'system', 'prompts', 'results'],
     mounted,
   });
@@ -563,10 +562,10 @@ export default function GenerateTextPlaygroundPage({
   // Scroll to section
   const scrollToSection = (sectionKey: string) => {
     const sectionRefs: Record<string, React.RefObject<HTMLDivElement>> = {
-      models: modelSectionRef,
-      system: systemSectionRef,
-      prompts: promptSectionRef,
-      results: resultsSectionRef,
+      models: modelSectionRef as React.RefObject<HTMLDivElement>,
+      system: systemSectionRef as React.RefObject<HTMLDivElement>,
+      prompts: promptSectionRef as React.RefObject<HTMLDivElement>,
+      results: resultsSectionRef as React.RefObject<HTMLDivElement>,
     };
     sectionRefs[sectionKey]?.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
@@ -583,7 +582,7 @@ export default function GenerateTextPlaygroundPage({
         glow: 'rgba(59,130,246,0.5)',
         hoverBg: 'hover:bg-blue-100 dark:hover:bg-blue-900/30',
       },
-      ref: modelSectionRef,
+      ref: modelSectionRef as React.RefObject<HTMLDivElement>,
     },
     {
       key: 'system',
@@ -595,7 +594,7 @@ export default function GenerateTextPlaygroundPage({
         glow: 'rgba(234,179,8,0.5)',
         hoverBg: 'hover:bg-yellow-100 dark:hover:bg-yellow-900/30',
       },
-      ref: systemSectionRef,
+      ref: systemSectionRef as React.RefObject<HTMLDivElement>,
     },
     {
       key: 'prompts',
@@ -607,7 +606,7 @@ export default function GenerateTextPlaygroundPage({
         glow: 'rgba(249,115,22,0.5)',
         hoverBg: 'hover:bg-orange-100 dark:hover:bg-orange-900/30',
       },
-      ref: promptSectionRef,
+      ref: promptSectionRef as React.RefObject<HTMLDivElement>,
     },
     {
       key: 'results',
@@ -619,7 +618,7 @@ export default function GenerateTextPlaygroundPage({
         glow: 'rgba(168,85,247,0.5)',
         hoverBg: 'hover:bg-purple-100 dark:hover:bg-purple-900/30',
       },
-      ref: resultsSectionRef,
+      ref: resultsSectionRef as React.RefObject<HTMLDivElement>,
     },
   ];
 

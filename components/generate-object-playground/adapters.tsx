@@ -66,7 +66,7 @@ export function getResultObject(result: GenerateObjectResult): unknown | undefin
 }
 
 // Rendering
-export function renderResultContent(result: GenerateObjectResult, threadId: string): ReactNode {
+export function renderResultContent(result: GenerateObjectResult): ReactNode {
   return (
     <pre className="text-xs font-mono whitespace-pre-wrap break-words text-gray-900 dark:text-gray-100">
       {JSON.stringify(result.object, null, 2)}

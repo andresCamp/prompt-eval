@@ -11,6 +11,7 @@ import {
 import { getImage } from '@/lib/image-storage';
 import { replaceVariables } from '@/components/prompt-playground/shared/utils';
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function extractDataUrl(image?: string): { data?: string; mimeType?: string } {
   if (!image) {
     return { data: undefined, mimeType: undefined };
