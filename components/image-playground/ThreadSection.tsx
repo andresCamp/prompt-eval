@@ -11,9 +11,14 @@ import { Plus, Copy, Trash2, Eye, EyeOff, ChevronDown, GitBranchPlus, Check } fr
 import {
   ASPECT_RATIOS,
   IMAGE_PROVIDERS,
+  GOOGLE_MODELS,
+  GEMINI_ASPECT_RATIOS,
+  GEMINI_IMAGE_SIZES,
   ImageProvider,
   ImagePromptThread,
-  ReveMode
+  ReveMode,
+  GeminiAspectRatio,
+  GeminiImageSize
 } from './types';
 import { ImageUpload } from './ImageUpload';
 import { getRequiredImages } from './types';
@@ -239,7 +244,7 @@ export function PromptThreadSection({
       onDuplicateThread={handleDuplicate}
     >
       {(thread, onUpdate) => {
-        const required = getRequiredImages(thread.provider, thread.mode);
+        const required = getRequiredImages(thread.provider, thread.mode, thread.version);
         const imageIds = thread.referenceImageIds || [];
 
         // Detect variables in the prompt (called directly, not memoized due to render prop context)
@@ -286,6 +291,27 @@ export function PromptThreadSection({
                 </SelectContent>
               </Select>
             </div>
+
+            {thread.provider === 'google' && (
+              <div>
+                <label className="text-sm font-medium">Model</label>
+                <Select
+                  value={thread.version ?? 'models/gemini-2.5-flash-image-preview'}
+                  onValueChange={(value) => onUpdate({ version: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {GOOGLE_MODELS.map(option => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <PromptModeTabs
               provider={thread.provider}
               mode={thread.mode}
@@ -341,6 +367,48 @@ export function PromptThreadSection({
                     ? 'Remix mode supports 1 to 4 reference images.'
                     : 'Edit mode requires exactly one reference image.'}
             </p>
+            {thread.provider === 'google' && thread.version === 'models/gemini-3-pro-image-preview' && (
+              <div className="rounded-md border bg-muted/40 p-3 space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-sm font-medium">Aspect Ratio</label>
+                    <Select
+                      value={thread.geminiAspectRatio ?? 'auto'}
+                      onValueChange={(value) => onUpdate({ geminiAspectRatio: value as GeminiAspectRatio })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {GEMINI_ASPECT_RATIOS.map(option => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Image Size</label>
+                    <Select
+                      value={thread.geminiImageSize ?? 'auto'}
+                      onValueChange={(value) => onUpdate({ geminiImageSize: value as GeminiImageSize })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {GEMINI_IMAGE_SIZES.map(option => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+            )}
             {thread.provider === 'reve' && (
               <div className="rounded-md border bg-muted/40 p-3 space-y-3">
                 <div>

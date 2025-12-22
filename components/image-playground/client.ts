@@ -11,7 +11,6 @@ import {
 import { getImage } from '@/lib/image-storage';
 import { replaceVariables } from '@/components/prompt-playground/shared/utils';
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function extractDataUrl(image?: string): { data?: string; mimeType?: string } {
   if (!image) {
     return { data: undefined, mimeType: undefined };
@@ -31,21 +30,44 @@ function extractDataUrl(image?: string): { data?: string; mimeType?: string } {
 
 async function buildGooglePayload(thread: ImageExecutionThread, rowValues?: Record<string, string>): Promise<GoogleImageRequest> {
   const { promptThread } = thread;
-  let referenceImage: string | undefined;
+  const referenceImages: Array<{ data: string; mimeType: string }> = [];
 
-  if (promptThread.referenceImageIds?.[0]) {
-    const imageData = await getImage(promptThread.referenceImageIds[0]);
-    referenceImage = imageData || undefined;
+  // Load all reference images
+  if (promptThread.referenceImageIds?.length) {
+    for (const imageId of promptThread.referenceImageIds) {
+      const imageData = await getImage(imageId);
+      if (imageData) {
+        // Extract mime type and base64 data from data URL
+        const extracted = extractDataUrl(imageData);
+        if (extracted.data) {
+          referenceImages.push({
+            data: extracted.data,
+            mimeType: extracted.mimeType || 'image/png'
+          });
+        }
+      }
+    }
   }
 
   // Replace variables in prompt (use row values if available, fallback to thread variables for backward compat)
   const processedPrompt = replaceVariables(promptThread.prompt, rowValues ?? promptThread.variables);
 
-  return {
+  // Build the request payload
+  const payload: GoogleImageRequest = {
     prompt: processedPrompt,
-    referenceImage,
-    referenceImageMimeType: referenceImage ? 'image/png' : undefined
+    referenceImages: referenceImages.length > 0 ? referenceImages : undefined,
+    version: promptThread.version
   };
+
+  // Add Gemini 3 Pro image config if not 'auto'
+  if (promptThread.geminiAspectRatio && promptThread.geminiAspectRatio !== 'auto') {
+    payload.aspectRatio = promptThread.geminiAspectRatio;
+  }
+  if (promptThread.geminiImageSize && promptThread.geminiImageSize !== 'auto') {
+    payload.imageSize = promptThread.geminiImageSize;
+  }
+
+  return payload;
 }
 
 async function buildRevePayload(thread: ImageExecutionThread, rowValues?: Record<string, string>) {
@@ -112,7 +134,7 @@ export async function runImageExecution(
   let endpoint: string;
   let body: unknown;
 
-  const requiredImages = getRequiredImages(provider, thread.promptThread.mode);
+  const requiredImages = getRequiredImages(provider, thread.promptThread.mode, thread.promptThread.version);
   const providedImages = thread.promptThread.referenceImageIds?.filter(Boolean) ?? [];
   if (providedImages.length < requiredImages.min || providedImages.length > requiredImages.max) {
     return {

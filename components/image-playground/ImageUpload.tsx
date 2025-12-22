@@ -1,9 +1,9 @@
 'use client';
 
-import { useRef, ChangeEvent, useEffect, useState } from 'react';
+import { useRef, ChangeEvent, useEffect, useState, DragEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Trash2, Upload, Loader2 } from 'lucide-react';
+import { Trash2, Upload, Loader2, Clipboard, GripVertical } from 'lucide-react';
 import type { ImageUploadProps } from './types';
 import Image from 'next/image';
 import { saveReferenceImage, getImage, releaseImage } from '@/lib/image-storage';
@@ -31,6 +31,8 @@ export function ImageUpload({ imageIds, maxImages, onImageIdsChange, disabled, r
   const [displayImages, setDisplayImages] = useState<Record<string, string>>({});
   const [loadingImages, setLoadingImages] = useState<Set<string>>(new Set());
   const [uploading, setUploading] = useState(false);
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
   // Load images from IndexedDB for display
   useEffect(() => {
@@ -116,6 +118,80 @@ export function ImageUpload({ imageIds, maxImages, onImageIdsChange, disabled, r
 
   const canAddMore = imageIds.length < maxImages;
 
+  const handleDragStart = (e: DragEvent<HTMLDivElement>, index: number) => {
+    setDraggedIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', index.toString());
+  };
+
+  const handleDragOver = (e: DragEvent<HTMLDivElement>, index: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (draggedIndex !== null && index !== draggedIndex) {
+      setDragOverIndex(index);
+    }
+  };
+
+  const handleDragLeave = () => {
+    setDragOverIndex(null);
+  };
+
+  const handleDrop = (e: DragEvent<HTMLDivElement>, dropIndex: number) => {
+    e.preventDefault();
+    if (draggedIndex === null || draggedIndex === dropIndex) {
+      setDraggedIndex(null);
+      setDragOverIndex(null);
+      return;
+    }
+
+    const newImageIds = [...imageIds];
+    const [draggedItem] = newImageIds.splice(draggedIndex, 1);
+    newImageIds.splice(dropIndex, 0, draggedItem);
+    onImageIdsChange(newImageIds);
+
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
+
+  const handlePaste = async () => {
+    try {
+      const clipboardItems = await navigator.clipboard.read();
+      const newImageIds: string[] = [];
+      const remainingSlots = maxImages - imageIds.length;
+      let processedCount = 0;
+
+      setUploading(true);
+
+      for (const item of clipboardItems) {
+        if (processedCount >= remainingSlots) break;
+
+        const imageType = item.types.find(type => type.startsWith('image/'));
+        if (imageType) {
+          const blob = await item.getType(imageType);
+          // Convert blob to file-like object for fileToBase64
+          const file = new File([blob], 'pasted-image', { type: imageType });
+          const base64 = await fileToBase64(file);
+          const imageId = await saveReferenceImage(base64);
+          newImageIds.push(imageId);
+          processedCount++;
+        }
+      }
+
+      if (newImageIds.length > 0) {
+        onImageIdsChange([...imageIds, ...newImageIds]);
+      }
+    } catch (error) {
+      console.error('Failed to paste from clipboard:', error);
+    } finally {
+      setUploading(false);
+    }
+  };
+
   return (
     <div className="space-y-3">
       <div className="flex gap-2">
@@ -137,6 +213,16 @@ export function ImageUpload({ imageIds, maxImages, onImageIdsChange, disabled, r
             </>
           )}
         </Button>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={handlePaste}
+          disabled={disabled || !canAddMore || uploading}
+          title="Paste image from clipboard"
+        >
+          <Clipboard className="mr-2 h-4 w-4" />
+          Paste
+        </Button>
         {required && imageIds.length === 0 && (
           <span className="text-xs text-red-500 self-center">At least one image is required</span>
         )}
@@ -154,9 +240,24 @@ export function ImageUpload({ imageIds, maxImages, onImageIdsChange, disabled, r
           {imageIds.map((id, index) => {
             const imageData = displayImages[id];
             const isLoading = loadingImages.has(id);
+            const isDragging = draggedIndex === index;
+            const isDragOver = dragOverIndex === index;
 
             return (
-              <Card key={id} className="relative h-32 overflow-hidden">
+              <Card
+                key={id}
+                draggable={!disabled && imageIds.length > 1}
+                onDragStart={(e) => handleDragStart(e, index)}
+                onDragOver={(e) => handleDragOver(e, index)}
+                onDragLeave={handleDragLeave}
+                onDrop={(e) => handleDrop(e, index)}
+                onDragEnd={handleDragEnd}
+                className={`relative h-32 overflow-hidden transition-all ${
+                  isDragging ? 'opacity-50 scale-95' : ''
+                } ${isDragOver ? 'ring-2 ring-primary ring-offset-2' : ''} ${
+                  imageIds.length > 1 && !disabled ? 'cursor-grab active:cursor-grabbing' : ''
+                }`}
+              >
                 <div className="relative h-full w-full">
                   {isLoading ? (
                     <div className="flex h-full items-center justify-center bg-gray-50 dark:bg-gray-900">
@@ -170,12 +271,20 @@ export function ImageUpload({ imageIds, maxImages, onImageIdsChange, disabled, r
                       sizes="200px"
                       className="object-cover"
                       unoptimized
+                      draggable={false}
                     />
                   ) : (
                     <div className="flex h-full items-center justify-center bg-gray-50 dark:bg-gray-900">
                       <span className="text-xs text-muted-foreground">Failed to load</span>
                     </div>
                   )}
+                </div>
+                {/* Order number badge */}
+                <div className="absolute top-2 left-2 flex items-center gap-1 rounded bg-black/70 px-1.5 py-0.5 text-xs font-medium text-white">
+                  {imageIds.length > 1 && !disabled && (
+                    <GripVertical className="h-3 w-3" />
+                  )}
+                  {index + 1}
                 </div>
                 <Button
                   type="button"

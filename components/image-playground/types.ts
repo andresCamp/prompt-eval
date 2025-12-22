@@ -17,12 +17,43 @@ export const IMAGE_PROVIDERS = [
 export type ImageProvider = 'google' | 'reve';
 export type ReveMode = 'create' | 'remix' | 'edit';
 
+export const GOOGLE_MODELS = [
+  { value: 'models/gemini-2.5-flash-image-preview', label: 'Nano Banana', maxReferenceImages: 5 },
+  { value: 'models/gemini-3-pro-image-preview', label: 'Nano Banana Pro', maxReferenceImages: 14 }
+] as const;
+
+export type GoogleModel = typeof GOOGLE_MODELS[number]['value'];
+
+export function getGoogleModelConfig(version?: string) {
+  return GOOGLE_MODELS.find(m => m.value === version) ?? GOOGLE_MODELS[0];
+}
+
 // ---------------------------------------------
 // Generation Parameters
 // ---------------------------------------------
 
 export type AspectRatio = '16:9' | '9:16' | '3:2' | '2:3' | '4:3' | '3:4' | '1:1';
 export type ImageFormat = 'image/png' | 'image/jpeg' | 'image/webp' | 'application/json';
+
+// Gemini 3 Pro specific types
+export type GeminiAspectRatio = 'auto' | '1:1' | '3:4' | '4:3' | '9:16' | '16:9';
+export type GeminiImageSize = 'auto' | '1K' | '2K' | '4K';
+
+export const GEMINI_ASPECT_RATIOS: { value: GeminiAspectRatio; label: string }[] = [
+  { value: 'auto', label: 'Auto (Default)' },
+  { value: '1:1', label: 'Square (1:1)' },
+  { value: '16:9', label: 'Widescreen (16:9)' },
+  { value: '9:16', label: 'Portrait (9:16)' },
+  { value: '4:3', label: 'Fullscreen (4:3)' },
+  { value: '3:4', label: 'Standard Portrait (3:4)' }
+];
+
+export const GEMINI_IMAGE_SIZES: { value: GeminiImageSize; label: string }[] = [
+  { value: 'auto', label: 'Auto (Default)' },
+  { value: '1K', label: '1K' },
+  { value: '2K', label: '2K' },
+  { value: '4K', label: '4K' }
+];
 
 export const ASPECT_RATIOS: { value: AspectRatio; label: string }[] = [
   { value: '1:1', label: 'Square (1:1)' },
@@ -83,6 +114,9 @@ export interface ImagePromptThread {
   variables?: Record<string, string>;
   // Link to Data Set (auto-assigned based on detected variables)
   dataSetId?: string;
+  // Gemini 3 Pro specific settings
+  geminiAspectRatio?: GeminiAspectRatio;
+  geminiImageSize?: GeminiImageSize;
 }
 
 export interface ImageExecutionThread {
@@ -99,6 +133,13 @@ export interface ImageExecutionThread {
 // API Response Types
 // ---------------------------------------------
 
+export interface TokenUsage {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  estimatedCost: number; // USD
+}
+
 export interface ImageGenerationResult {
   success: boolean;
   imageId?: string; // Reference to image stored in IndexedDB
@@ -110,12 +151,16 @@ export interface ImageGenerationResult {
   creditsRemaining?: number;
   contentViolation?: boolean;
   version?: string;
+  usage?: TokenUsage; // Token usage and cost info (Gemini)
 }
 
 export interface GoogleImageRequest {
   prompt: string;
-  referenceImage?: string; // Optional base64 image
-  referenceImageMimeType?: string;
+  referenceImages?: Array<{ data: string; mimeType: string }>; // Optional base64 images with mime types
+  version?: string;
+  // Gemini 3 Pro image configuration (omit for 'auto'/default behavior)
+  aspectRatio?: '1:1' | '3:4' | '4:3' | '9:16' | '16:9';
+  imageSize?: '1K' | '2K' | '4K';
 }
 
 export interface ReveCreateRequest {
@@ -164,9 +209,10 @@ export interface ImageUploadProps {
   required?: boolean;
 }
 
-export function getRequiredImages(provider: ImageProvider, mode?: ReveMode): { min: number; max: number } {
+export function getRequiredImages(provider: ImageProvider, mode?: ReveMode, version?: string): { min: number; max: number } {
   if (provider === 'google') {
-    return { min: 0, max: 1 };
+    const modelConfig = getGoogleModelConfig(version);
+    return { min: 0, max: modelConfig.maxReferenceImages };
   }
 
   // REVE

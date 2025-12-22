@@ -8,7 +8,7 @@ import { getImage } from '@/lib/image-storage';
 import type { ImageExecutionThread } from './types';
 import Image from 'next/image';
 import { IMAGE_PROVIDERS } from './types';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 
 interface ImageGridProps {
   threads: ImageExecutionThread[];
@@ -20,14 +20,51 @@ interface ImageGridProps {
   onToggleCache: (threadId: string, shouldCache: boolean, imageData?: string) => void;
 }
 
+function ElapsedTimer({ isRunning }: { isRunning: boolean }) {
+  const [elapsed, setElapsed] = useState(0);
+  const startTimeRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (isRunning) {
+      startTimeRef.current = Date.now();
+      setElapsed(0);
+
+      const interval = setInterval(() => {
+        if (startTimeRef.current) {
+          setElapsed(Math.floor((Date.now() - startTimeRef.current) / 1000));
+        }
+      }, 1000);
+
+      return () => clearInterval(interval);
+    } else {
+      startTimeRef.current = null;
+    }
+  }, [isRunning]);
+
+  if (!isRunning) return null;
+
+  const minutes = Math.floor(elapsed / 60);
+  const seconds = elapsed % 60;
+  const display = minutes > 0
+    ? `${minutes}:${seconds.toString().padStart(2, '0')}`
+    : `${seconds}s`;
+
+  return (
+    <span className="tabular-nums font-mono">{display}</span>
+  );
+}
+
 function ImagePreview({ image, onClick, isGenerating }: { image?: string; onClick?: () => void; isGenerating?: boolean }) {
   if (!image) {
     if (isGenerating) {
       return (
         <div className="flex h-60 w-full items-center justify-center rounded-md border border-dashed">
-          <div className="flex items-center gap-2">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            <span className="text-sm text-muted-foreground">Generating...</span>
+          <div className="flex flex-col items-center gap-2">
+            <Loader2 className="h-5 w-5 animate-spin" />
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <span>Generating</span>
+              <ElapsedTimer isRunning={true} />
+            </div>
           </div>
         </div>
       );
@@ -56,6 +93,17 @@ function ImagePreview({ image, onClick, isGenerating }: { image?: string; onClic
           }`}
           unoptimized
         />
+        {isGenerating && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+            <div className="flex flex-col items-center gap-2 text-white">
+              <Loader2 className="h-6 w-6 animate-spin" />
+              <div className="flex items-center gap-2 text-sm">
+                <span>Regenerating</span>
+                <ElapsedTimer isRunning={true} />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -262,8 +310,12 @@ export function ResultsGrid({ threads, onRunThread, onDownload, onRunAll, anyRun
                     <p>Status: {result.success ? 'Success' : 'Failed'}</p>
                     {result.error && <p className="text-red-500">{result.error}</p>}
                     {result.duration !== undefined && <p>Duration: {result.duration.toFixed(2)}s</p>}
-                    {result.requestId && <p>Request ID: {result.requestId}</p>}
                     {result.version && <p>Version: {result.version}</p>}
+                    {result.usage && (
+                      <p>
+                        Tokens: {result.usage.totalTokens.toLocaleString()} ({result.usage.inputTokens.toLocaleString()} in / {result.usage.outputTokens.toLocaleString()} out) · ~${result.usage.estimatedCost.toFixed(4)}
+                      </p>
+                    )}
                     {result.creditsUsed !== undefined && (
                       <p>Credits used: {result.creditsUsed} · Remaining: {result.creditsRemaining ?? '--'}</p>
                     )}

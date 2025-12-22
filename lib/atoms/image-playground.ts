@@ -1,8 +1,10 @@
-import { atomFamily } from 'jotai/utils';
-import { atomWithStorage } from 'jotai/utils';
+import { atomFamily, atomWithStorage } from 'jotai/utils';
 import type { ImageGenerationConfig } from '@/components/image-playground/types';
 import { createDefaultConfig } from '@/components/image-playground/defaults';
 import type { SyncStorage } from 'jotai/vanilla/utils/atomWithStorage';
+
+// Atom for tracking total cost across sessions (persisted)
+export const totalCostAtom = atomWithStorage<number>('image-playground-total-cost', 0);
 
 // Custom storage that strips image data before persisting
 const imageConfigStorage: SyncStorage<ImageGenerationConfig> = {

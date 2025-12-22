@@ -13,6 +13,8 @@ const DEFAULT_REVE_PROMPT = 'A cinematic portrait of a cyberpunk explorer wearin
 const DEFAULT_REVE_VERSION = 'latest';
 const DEFAULT_ASPECT_RATIO: AspectRatio = '1:1';
 
+const DEFAULT_GOOGLE_MODEL = 'models/gemini-2.5-flash-image-preview';
+
 function createPromptThread(options: {
   name: string;
   provider: ImageProvider;
@@ -37,7 +39,12 @@ function createPromptThread(options: {
 
 export function createDefaultConfig(): ImageGenerationConfig {
   const promptThreads: ImagePromptThread[] = [
-    createPromptThread({ name: 'Gemini Prompt', provider: 'google', prompt: DEFAULT_GOOGLE_PROMPT }),
+    createPromptThread({
+      name: 'Gemini Prompt',
+      provider: 'google',
+      prompt: DEFAULT_GOOGLE_PROMPT,
+      version: DEFAULT_GOOGLE_MODEL
+    }),
     createPromptThread({
       name: 'REVE Prompt',
       provider: 'reve',

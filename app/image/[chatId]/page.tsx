@@ -17,6 +17,8 @@ import { clearOldImages, saveImage, deleteImage, getImage } from '@/lib/image-st
 import { PromptThreadSection } from '@/components/image-playground/ThreadSection';
 import { DataSetsSection } from '@/components/image-playground/DataSetsSection';
 import { ResultsGrid } from '@/components/image-playground/ResultsGrid';
+import { CostTracker } from '@/components/image-playground/CostTracker';
+import { totalCostAtom } from '@/lib/atoms/image-playground';
 import { runImageExecution } from '@/components/image-playground/client';
 import {
   buildExecutionThreads,
@@ -51,6 +53,7 @@ export default function ImagePlaygroundPage({ params }: { params: ParamsPromise 
 
   const configAtom = imageConfigAtomFamily(chatId);
   const [config, setConfig] = useAtom(configAtom);
+  const [, setTotalCost] = useAtom(totalCostAtom);
   const [copiedStates, setCopiedStates] = useState<Record<string, boolean>>({});
   const [mounted, setMounted] = useState(false);
 
@@ -154,6 +157,11 @@ export default function ImagePlaygroundPage({ params }: { params: ParamsPromise 
         } catch (error) {
           console.error('Failed to delete old cached image:', error);
         }
+      }
+
+      // Add cost to total if available
+      if (result.usage?.estimatedCost) {
+        setTotalCost(prev => prev + result.usage!.estimatedCost);
       }
 
       // The new image is not cached by default - just store temporarily with the image data
@@ -281,6 +289,7 @@ export default function ImagePlaygroundPage({ params }: { params: ParamsPromise 
 
   return (
     <div className="mx-auto max-w-none space-y-6 p-6">
+      <CostTracker />
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <ImageIcon className="h-8 w-8 text-blue-600" />
